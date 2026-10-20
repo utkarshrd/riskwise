@@ -1,0 +1,173 @@
+# RiskWise — Multi-Domain Financial Risk Intelligence Platform
+
+RiskWise is an explainable, agentic financial risk intelligence platform combining borrower credit-risk analysis, personal financial stress testing, portfolio market-risk measurement, rolling Value-at-Risk (VaR) validation, and source-grounded educational guidance.
+
+Built as a modular monolith adhering to PRD v3.0 specifications.
+
+---
+
+## Architecture at a Glance
+
+- **Frontend:** Next.js (App Router, TypeScript, Tailwind CSS)
+- **Backend:** FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite
+- **ML / Risk Engine:** scikit-learn, XGBoost, SHAP, NumPy, SciPy, Pandas
+- **Agent Orchestrator:** LangGraph bounded tool-calling & RAG retriever
+- **Zero-Secret Startup:** Fully operational offline mode; no external API key or paid feed required.
+
+For in-depth architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Directory Layout
+
+```text
+├── PRD.md                       # Implementation source of truth (v3.0)
+├── README.md                    # Project documentation & setup instructions
+├── .env.example                 # Environment variables template (offline defaults)
+├── Makefile                     # Task runner
+├── docker-compose.yml           # Containerized orchestration
+├── docs/                        # Architectural documentation
+│   ├── ARCHITECTURE.md          # Modular monolith design & data flow
+│   ├── DECISIONS.md             # Architectural Decision Records (ADRs)
+│   ├── DATA_SOURCES.md          # Benchmark provenance & offline strategy
+│   ├── TEST_PLAN.md             # Testing strategy & quality gates
+│   ├── KNOWN_LIMITATIONS.md     # Disclosures & academic boundaries
+│   ├── MODEL_CARD.md            # Credit model card template
+│   └── API_CONTRACTS.md         # FastAPI endpoint specifications
+├── backend/                     # FastAPI backend service
+│   ├── app/
+│   │   ├── main.py              # Application entrypoint & CORS
+│   │   ├── core/                # Settings, logging, exceptions
+│   │   ├── api/                 # API routers (/api/v1)
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── db/                  # SQLAlchemy models & sessions
+│   │   └── services/            # Domain calculation & ML services
+│   ├── tests/                   # Pytest suite
+│   ├── requirements.txt         # Pinned Python dependencies
+│   └── pyproject.toml           # Project metadata & linter configuration
+├── frontend/                    # Next.js App Router application
+├── data/                        # Datasets, snapshots, manifests
+│   ├── raw/                     # Raw downloaded benchmarks (UCI Credit)
+│   ├── processed/               # Cleaned data partitions
+│   ├── market_snapshots/        # Local offline daily price snapshots
+│   └── manifests/               # Data verification manifests
+├── knowledge/                   # Curated RAG documents & manifest
+└── scripts/                     # Setup, data ingestion, evaluation scripts
+    └── setup_data.py            # Data setup & status verification utility
+```
+
+---
+
+## Quick Start
+
+### Option A: Run with Docker (Recommended for Friends / Easy Setup)
+The fastest way to run RiskWise on any machine (Windows, Mac, Linux) with zero local Python/Node dependencies:
+
+1. **Clone the repo and start:**
+   ```bash
+   docker compose up --build
+   ```
+2. **Access the application:**
+   - **Frontend UI:** [http://localhost:3000](http://localhost:3000)
+   - **Backend API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+   - **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+
+To stop the containers:
+```bash
+docker compose down
+```
+
+---
+
+### Option B: Local Development Setup (Manual)
+- Python 3.11+
+- Node.js 18+ & npm
+- Git
+
+### 1. Environment Configuration
+Copy the sample environment file (no secrets required):
+```bash
+cp .env.example .env
+```
+
+### 2. Backend Setup
+Create and activate a virtual environment, then install dependencies:
+```bash
+# On Windows
+py -3.11 -m venv backend/venv
+.\backend\venv\Scripts\pip install -r backend/requirements.txt
+.\backend\venv\Scripts\alembic upgrade head
+.\backend\venv\Scripts\python scripts/register_models.py
+
+# On Linux/macOS
+python3.11 -m venv backend/venv
+source backend/venv/bin/activate
+pip install -r backend/requirements.txt
+alembic upgrade head
+python scripts/register_models.py
+```
+
+### 3. Frontend Setup
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 4. Verify Data Setup & Status
+```bash
+# Check current dataset and market snapshot status
+python scripts/setup_data.py --info
+
+# (Optional) Download the UCI Credit Card Clients benchmark dataset
+python scripts/setup_data.py --download-uci
+```
+
+---
+
+## Running the Application
+
+### Start Backend
+```bash
+# Windows
+.\backend\venv\Scripts\uvicorn backend.app.main:app --reload --port 8000
+
+# Linux/macOS
+uvicorn backend.app.main:app --reload --port 8000
+```
+- Interactive API Docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Liveness Check: [http://localhost:8000/health](http://localhost:8000/health)
+- System Status: [http://localhost:8000/api/v1/system/status](http://localhost:8000/api/v1/system/status)
+
+### Start Frontend
+```bash
+cd frontend
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the RiskWise dashboard.
+
+---
+
+## Testing & Quality Gates
+
+Run all quality checks before committing:
+
+```bash
+# Run backend test suite
+.\backend\venv\Scripts\pytest backend/tests -v
+
+# Run backend linter
+.\backend\venv\Scripts\ruff check backend
+
+# Run frontend tests & linter
+cd frontend && npm test --if-present && npm run lint
+```
+
+---
+
+## Ethical Disclosure & Academic Scope
+
+RiskWise is an educational engineering prototype developed for research and evaluation.
+- Outputs represent **relative risk indicators** within the context of historical benchmark distributions.
+- It does **not** estimate Indian CIBIL credit scores, guarantee investment returns, or act as an autonomous financial adviser.
+- For complete disclosures, consult [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).

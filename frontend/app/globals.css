@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-border: #e2e8f0;
+  --sidebar-bg: #0f172a;
+  --sidebar-border: #1e293b;
+  --accent: #6366f1;
+  --accent-light: #e0e7ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0f1e;
+    --foreground: #e2e8f0;
+    --card: #111827;
+    --card-border: #1f2937;
+    --sidebar-bg: #060d1e;
+    --sidebar-border: #1e293b;
+    --accent-light: #1e1b4b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+
+/* Custom animations */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Risk band badge colors */
+.badge-low { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.badge-moderate { background: #fef9c3; color: #854d0e; border-color: #fef08a; }
+.badge-elevated { background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
+.badge-high { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+
+@media (prefers-color-scheme: dark) {
+  .badge-low { background: #14532d; color: #86efac; border-color: #166534; }
+  .badge-moderate { background: #422006; color: #fde047; border-color: #713f12; }
+  .badge-elevated { background: #431407; color: #fb923c; border-color: #7c2d12; }
+  .badge-high { background: #450a0a; color: #f87171; border-color: #7f1d1d; }
+}

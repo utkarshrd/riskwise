@@ -1,0 +1,326 @@
+{
+  "model_version": "credit_indian_xgboost_v1",
+  "dataset_name": "Indian_Banking_CIBIL_Merged_2026",
+  "dataset_records": 51336,
+  "target": "Approved_Flag",
+  "classes": [
+    "P1",
+    "P2",
+    "P3",
+    "P4"
+  ],
+  "class_distribution": {
+    "P2": 32199,
+    "P3": 7452,
+    "P4": 5882,
+    "P1": 5803
+  },
+  "train_size": 35935,
+  "val_size": 7700,
+  "test_size": 7701,
+  "selected_features_count": 42,
+  "models_evaluated": {
+    "majority_baseline": {
+      "model_name": "Majority Class Baseline",
+      "accuracy": 0.6272,
+      "macro_f1": 0.1927,
+      "weighted_f1": 0.4835,
+      "log_loss": 13.4374,
+      "per_class": {
+        "P1": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 871
+        },
+        "P2": {
+          "precision": 0.6272,
+          "recall": 1.0,
+          "f1": 0.7709,
+          "support": 4830
+        },
+        "P3": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 1118
+        },
+        "P4": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 882
+        }
+      },
+      "confusion_matrix": [
+        [
+          0,
+          871,
+          0,
+          0
+        ],
+        [
+          0,
+          4830,
+          0,
+          0
+        ],
+        [
+          0,
+          1118,
+          0,
+          0
+        ],
+        [
+          0,
+          882,
+          0,
+          0
+        ]
+      ]
+    },
+    "logistic_regression": {
+      "model_name": "Multinomial Logistic Regression",
+      "accuracy": 0.7565,
+      "macro_f1": 0.608,
+      "weighted_f1": 0.7201,
+      "log_loss": 0.6246,
+      "per_class": {
+        "P1": {
+          "precision": 0.7864,
+          "recall": 0.6762,
+          "f1": 0.7272,
+          "support": 871
+        },
+        "P2": {
+          "precision": 0.7804,
+          "recall": 0.9393,
+          "f1": 0.8525,
+          "support": 4830
+        },
+        "P3": {
+          "precision": 0.4025,
+          "recall": 0.1163,
+          "f1": 0.1804,
+          "support": 1118
+        },
+        "P4": {
+          "precision": 0.6994,
+          "recall": 0.6463,
+          "f1": 0.6718,
+          "support": 882
+        }
+      },
+      "confusion_matrix": [
+        [
+          589,
+          279,
+          2,
+          1
+        ],
+        [
+          129,
+          4537,
+          105,
+          59
+        ],
+        [
+          30,
+          773,
+          130,
+          185
+        ],
+        [
+          1,
+          225,
+          86,
+          570
+        ]
+      ]
+    },
+    "xgboost_no_credit_score": {
+      "model_name": "XGBoost (No Credit_Score)",
+      "accuracy": 0.7852,
+      "macro_f1": 0.678,
+      "weighted_f1": 0.7679,
+      "log_loss": 0.4882,
+      "per_class": {
+        "P1": {
+          "precision": 0.7948,
+          "recall": 0.7692,
+          "f1": 0.7818,
+          "support": 871
+        },
+        "P2": {
+          "precision": 0.8302,
+          "recall": 0.9234,
+          "f1": 0.8743,
+          "support": 4830
+        },
+        "P3": {
+          "precision": 0.4533,
+          "recall": 0.2603,
+          "f1": 0.3307,
+          "support": 1118
+        },
+        "P4": {
+          "precision": 0.7417,
+          "recall": 0.7098,
+          "f1": 0.7254,
+          "support": 882
+        }
+      },
+      "confusion_matrix": [
+        [
+          670,
+          201,
+          0,
+          0
+        ],
+        [
+          140,
+          4460,
+          196,
+          34
+        ],
+        [
+          32,
+          611,
+          291,
+          184
+        ],
+        [
+          1,
+          100,
+          155,
+          626
+        ]
+      ]
+    },
+    "xgboost_with_credit_score": {
+      "model_name": "XGBoost (With Credit_Score)",
+      "accuracy": 0.9951,
+      "macro_f1": 0.9903,
+      "weighted_f1": 0.9951,
+      "log_loss": 0.0121,
+      "per_class": {
+        "P1": {
+          "precision": 0.9906,
+          "recall": 0.9667,
+          "f1": 0.9785,
+          "support": 871
+        },
+        "P2": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 4830
+        },
+        "P3": {
+          "precision": 0.9745,
+          "recall": 0.9919,
+          "f1": 0.9832,
+          "support": 1118
+        },
+        "P4": {
+          "precision": 0.9989,
+          "recall": 1.0,
+          "f1": 0.9994,
+          "support": 882
+        }
+      },
+      "confusion_matrix": [
+        [
+          842,
+          0,
+          29,
+          0
+        ],
+        [
+          0,
+          4830,
+          0,
+          0
+        ],
+        [
+          8,
+          0,
+          1109,
+          1
+        ],
+        [
+          0,
+          0,
+          0,
+          882
+        ]
+      ]
+    }
+  },
+  "champion_model": "xgboost_no_credit_score",
+  "champion_metrics": {
+    "model_name": "XGBoost (No Credit_Score)",
+    "accuracy": 0.7852,
+    "macro_f1": 0.678,
+    "weighted_f1": 0.7679,
+    "log_loss": 0.4882,
+    "per_class": {
+      "P1": {
+        "precision": 0.7948,
+        "recall": 0.7692,
+        "f1": 0.7818,
+        "support": 871
+      },
+      "P2": {
+        "precision": 0.8302,
+        "recall": 0.9234,
+        "f1": 0.8743,
+        "support": 4830
+      },
+      "P3": {
+        "precision": 0.4533,
+        "recall": 0.2603,
+        "f1": 0.3307,
+        "support": 1118
+      },
+      "P4": {
+        "precision": 0.7417,
+        "recall": 0.7098,
+        "f1": 0.7254,
+        "support": 882
+      }
+    },
+    "confusion_matrix": [
+      [
+        670,
+        201,
+        0,
+        0
+      ],
+      [
+        140,
+        4460,
+        196,
+        34
+      ],
+      [
+        32,
+        611,
+        291,
+        184
+      ],
+      [
+        1,
+        100,
+        155,
+        626
+      ]
+    ]
+  },
+  "leakage_study": {
+    "credit_score_included_f1": 0.9903,
+    "credit_score_excluded_f1": 0.678,
+    "rationale": "Credit_Score was intentionally excluded from the champion production model because: 1) Credit_Score was directly used by the lender in tier cutoffs to assign Approved_Flag (target leakage). 2) Credit_Score is completely missing from Unseen_Dataset.xlsx. 3) A true risk model must predict creditworthiness from underlying bureau behavior and credit trade lines."
+  },
+  "trained_at": "2026-10-18T11:27:56.310009+00:00"
+}

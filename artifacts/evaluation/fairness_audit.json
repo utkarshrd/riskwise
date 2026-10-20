@@ -1,0 +1,118 @@
+{
+  "audit_timestamp": "2026-10-14T10:04:23.882441+00:00",
+  "model_version": "credit_xgboost_v1",
+  "feature_set": "engineered_without_protected_attributes",
+  "decision_threshold": 0.3,
+  "sample_size": 4500,
+  "overall_approval_rate": 0.7682,
+  "subgroup_metrics": {
+    "sex": {
+      "Male (SEX=1)": {
+        "sample_size": 1766,
+        "auc": 0.751,
+        "approval_rate": 0.7508,
+        "default_rate": 0.2537,
+        "recall": 0.5402
+      },
+      "Female (SEX=2)": {
+        "sample_size": 2734,
+        "auc": 0.7932,
+        "approval_rate": 0.7794,
+        "default_rate": 0.2004,
+        "recall": 0.562
+      }
+    },
+    "education": {
+      "Graduate School": {
+        "sample_size": 1580,
+        "auc": 0.7738,
+        "approval_rate": 0.7968,
+        "default_rate": 0.2025,
+        "recall": 0.525
+      },
+      "University": {
+        "sample_size": 2086,
+        "auc": 0.7887,
+        "approval_rate": 0.7526,
+        "default_rate": 0.2287,
+        "recall": 0.5765
+      },
+      "High School": {
+        "sample_size": 766,
+        "auc": 0.7344,
+        "approval_rate": 0.7376,
+        "default_rate": 0.2572,
+        "recall": 0.5381
+      },
+      "Others": {
+        "sample_size": 68,
+        "auc": 0.9015,
+        "approval_rate": 0.9265,
+        "default_rate": 0.0294,
+        "recall": 0.5
+      }
+    },
+    "marriage": {
+      "Married": {
+        "sample_size": 2063,
+        "auc": 0.7731,
+        "approval_rate": 0.7659,
+        "default_rate": 0.2414,
+        "recall": 0.5402
+      },
+      "Single": {
+        "sample_size": 2383,
+        "auc": 0.7794,
+        "approval_rate": 0.7713,
+        "default_rate": 0.2052,
+        "recall": 0.5603
+      },
+      "Others": {
+        "sample_size": 54,
+        "auc": 0.8099,
+        "approval_rate": 0.7222,
+        "default_rate": 0.1667,
+        "recall": 0.7778
+      }
+    },
+    "age_band": {
+      "<25": {
+        "sample_size": 383,
+        "auc": 0.771,
+        "approval_rate": 0.6945,
+        "default_rate": 0.2533,
+        "recall": 0.5979
+      },
+      "25-34": {
+        "sample_size": 1948,
+        "auc": 0.7882,
+        "approval_rate": 0.7787,
+        "default_rate": 0.1987,
+        "recall": 0.5633
+      },
+      "35-49": {
+        "sample_size": 1758,
+        "auc": 0.7631,
+        "approval_rate": 0.7782,
+        "default_rate": 0.2247,
+        "recall": 0.5392
+      },
+      "50+": {
+        "sample_size": 411,
+        "auc": 0.7733,
+        "approval_rate": 0.7445,
+        "default_rate": 0.2847,
+        "recall": 0.5214
+      }
+    }
+  },
+  "disparate_impact_ratios": {
+    "sex_female_vs_male": 1.0381,
+    "education_highschool_vs_gradschool": 0.9257,
+    "marriage_single_vs_married": 1.0071,
+    "age_min_vs_reference_25_34": 0.8919,
+    "four_fifths_rule_threshold": 0.8,
+    "four_fifths_rule_compliant": true
+  },
+  "fairness_summary": "Four-fifths fair lending rule compliant: True. Sex DIR = 1.04, Education DIR = 0.93, Marriage DIR = 1.01, Age DIR = 0.89."
+}

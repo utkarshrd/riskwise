@@ -1,0 +1,25 @@
+{
+  "model_type": "TfidfVectorizer + LogisticRegression",
+  "train_samples": 78,
+  "val_samples": 20,
+  "classes": [
+    "ANALYZE_PORTFOLIO_RISK",
+    "CALCULATE_EMI",
+    "CREDIT_RISK_EXPLAIN",
+    "FINANCIAL_EDUCATION_RAG",
+    "GENERAL_CONVERSATION",
+    "PERSONAL_STRESS_TEST",
+    "REJECTED_PII",
+    "REJECTED_SAFETY",
+    "REJECTED_TRADING_STRATEGY",
+    "VALIDATE_VAR_MODEL"
+  ],
+  "validation_metrics": {
+    "accuracy": 0.8,
+    "precision": 0.8125,
+    "recall": 0.8,
+    "f1_score": 0.7952
+  },
+  "confidence_threshold": 0.35,
+  "hybrid_rapidfuzz_weight": 0.3
+}

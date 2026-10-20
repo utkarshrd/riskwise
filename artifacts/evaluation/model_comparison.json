@@ -1,0 +1,270 @@
+{
+  "majority_baseline": {
+    "model_name": "Majority Class Baseline",
+    "roc_auc": 0.5,
+    "f1_score": 0.1927,
+    "accuracy": 0.6272,
+    "macro_f1": 0.1927,
+    "weighted_f1": 0.4835,
+    "log_loss": 13.4374,
+    "decision_threshold": 0.5,
+    "risk_band_cutoffs": {
+      "low": 0.15,
+      "moderate": 0.4,
+      "elevated": 0.65
+    },
+    "per_class": {
+      "P1": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 871
+      },
+      "P2": {
+        "precision": 0.6272,
+        "recall": 1.0,
+        "f1": 0.7709,
+        "support": 4830
+      },
+      "P3": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 1118
+      },
+      "P4": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 882
+      }
+    },
+    "confusion_matrix": [
+      [
+        0,
+        871,
+        0,
+        0
+      ],
+      [
+        0,
+        4830,
+        0,
+        0
+      ],
+      [
+        0,
+        1118,
+        0,
+        0
+      ],
+      [
+        0,
+        882,
+        0,
+        0
+      ]
+    ]
+  },
+  "logistic_regression": {
+    "model_name": "Multinomial Logistic Regression",
+    "roc_auc": 0.8835,
+    "f1_score": 0.608,
+    "accuracy": 0.7565,
+    "macro_f1": 0.608,
+    "weighted_f1": 0.7201,
+    "log_loss": 0.6246,
+    "decision_threshold": 0.5,
+    "risk_band_cutoffs": {
+      "low": 0.15,
+      "moderate": 0.4,
+      "elevated": 0.65
+    },
+    "per_class": {
+      "P1": {
+        "precision": 0.7864,
+        "recall": 0.6762,
+        "f1": 0.7272,
+        "support": 871
+      },
+      "P2": {
+        "precision": 0.7804,
+        "recall": 0.9393,
+        "f1": 0.8525,
+        "support": 4830
+      },
+      "P3": {
+        "precision": 0.4025,
+        "recall": 0.1163,
+        "f1": 0.1804,
+        "support": 1118
+      },
+      "P4": {
+        "precision": 0.6994,
+        "recall": 0.6463,
+        "f1": 0.6718,
+        "support": 882
+      }
+    },
+    "confusion_matrix": [
+      [
+        589,
+        279,
+        2,
+        1
+      ],
+      [
+        129,
+        4537,
+        105,
+        59
+      ],
+      [
+        30,
+        773,
+        130,
+        185
+      ],
+      [
+        1,
+        225,
+        86,
+        570
+      ]
+    ]
+  },
+  "xgboost": {
+    "model_name": "XGBoost Classifier",
+    "roc_auc": 0.9275,
+    "f1_score": 0.678,
+    "accuracy": 0.7852,
+    "macro_f1": 0.678,
+    "weighted_f1": 0.7679,
+    "log_loss": 0.4882,
+    "decision_threshold": 0.5,
+    "risk_band_cutoffs": {
+      "low": 0.15,
+      "moderate": 0.4,
+      "elevated": 0.65
+    },
+    "per_class": {
+      "P1": {
+        "precision": 0.7948,
+        "recall": 0.7692,
+        "f1": 0.7818,
+        "support": 871
+      },
+      "P2": {
+        "precision": 0.8302,
+        "recall": 0.9234,
+        "f1": 0.8743,
+        "support": 4830
+      },
+      "P3": {
+        "precision": 0.4533,
+        "recall": 0.2603,
+        "f1": 0.3307,
+        "support": 1118
+      },
+      "P4": {
+        "precision": 0.7417,
+        "recall": 0.7098,
+        "f1": 0.7254,
+        "support": 882
+      }
+    },
+    "confusion_matrix": [
+      [
+        670,
+        201,
+        0,
+        0
+      ],
+      [
+        140,
+        4460,
+        196,
+        34
+      ],
+      [
+        32,
+        611,
+        291,
+        184
+      ],
+      [
+        1,
+        100,
+        155,
+        626
+      ]
+    ]
+  },
+  "xgboost_with_credit_score": {
+    "model_name": "XGBoost (With Credit_Score)",
+    "roc_auc": 0.9999,
+    "f1_score": 0.9903,
+    "accuracy": 0.9951,
+    "macro_f1": 0.9903,
+    "weighted_f1": 0.9951,
+    "log_loss": 0.0121,
+    "decision_threshold": 0.5,
+    "risk_band_cutoffs": {
+      "low": 0.15,
+      "moderate": 0.4,
+      "elevated": 0.65
+    },
+    "per_class": {
+      "P1": {
+        "precision": 0.9906,
+        "recall": 0.9667,
+        "f1": 0.9785,
+        "support": 871
+      },
+      "P2": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 4830
+      },
+      "P3": {
+        "precision": 0.9745,
+        "recall": 0.9919,
+        "f1": 0.9832,
+        "support": 1118
+      },
+      "P4": {
+        "precision": 0.9989,
+        "recall": 1.0,
+        "f1": 0.9994,
+        "support": 882
+      }
+    },
+    "confusion_matrix": [
+      [
+        842,
+        0,
+        29,
+        0
+      ],
+      [
+        0,
+        4830,
+        0,
+        0
+      ],
+      [
+        8,
+        0,
+        1109,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        882
+      ]
+    ]
+  }
+}
