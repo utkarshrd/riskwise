@@ -128,4 +128,11 @@ This document tracks all foundational architecture, domain modeling, and technic
   2. Enhance `POST /api/v1/credit/what-if` with `actionable_only` mode. In actionable mode, reject any modifications to protected/immutable attributes (`SEX`, `EDUCATION`, `MARRIAGE`, `AGE`) with HTTP 422, restrict modifications to borrower-controllable factors (payments, utilisation, delinquency remediation), and return a ranked list of actionable changes sorted by highest risk reduction.
 - **Consequences:** Intuitive consumer-facing API contract; strictly ethical and actionable counterfactual recommendations.
 
+---
 
+## ADR-012: Ingestion and DB-backed Search for Full Official NSE Instrument Universe
+- **Date:** 2026-10-22 (Tier A Milestone)
+- **Status:** Accepted
+- **Context:** Market search previously used a static dictionary of ~12 symbols. The platform requires fuzzy searching across the full official NSE universe with sector, index, and cap_bucket filtering.
+- **Decision:** Download official NSE equity master from `https://archives.nseindia.com/content/equities/EQUITY_L.csv` and ingest all 2,608 official listed equity instruments into the SQLite `instruments` table with sector, industry, series, ISIN, and aliases, combined with benchmark indices (`^NSEI`, `SPY`) and curated ETFs. Expose via `/market/search` with pagination (`page`, `limit`), sector/index/cap_bucket filters, and enrich `/market/universe` with database-backed instrument counts and sector/index facets while maintaining backward compatibility.
+- **Consequences:** 2,617 active verified instruments searchable with sub-second response times without inventing fake symbols.

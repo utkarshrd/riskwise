@@ -449,12 +449,39 @@ def ingest_equity_l_file(filepath: Path) -> list[dict]:
     return instruments
 
 
+def download_equity_l_file() -> bool:
+    """Attempts to download the official NSE EQUITY_L.csv file."""
+    try:
+        logger.info(f"Downloading official NSE equity list from {EQUITY_L_URL}...")
+        req = urllib.request.Request(
+            EQUITY_L_URL,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            content = response.read()
+            if len(content) > 1000:
+                LOCAL_EQUITY_L.parent.mkdir(parents=True, exist_ok=True)
+                with open(LOCAL_EQUITY_L, "wb") as f:
+                    f.write(content)
+                logger.info(f"Downloaded official NSE equity file ({len(content)} bytes) to {LOCAL_EQUITY_L}")
+                return True
+    except Exception as e:
+        logger.warning(f"Could not download EQUITY_L.csv from NSE: {e}. Will proceed with available local sources.")
+    return False
+
+
 def populate_instruments():
     """Populates the database instruments table."""
     db = SessionLocal()
     try:
+        # Load existing symbols
+        existing_symbols = {s for (s,) in db.query(Instrument.symbol).all()}
+        count = len(existing_symbols)
+
         # 1. Ingest seed instruments first
-        count = 0
         for item in SEED_INSTRUMENTS:
             inst = db.query(Instrument).filter(Instrument.symbol == item["symbol"]).first()
             if not inst:
@@ -475,6 +502,8 @@ def populate_instruments():
                     updated_at=datetime.now(UTC),
                 )
                 db.add(inst)
+                existing_symbols.add(item["symbol"])
+                count += 1
             else:
                 inst.name = item["name"]
                 inst.isin = item.get("isin", inst.isin)
@@ -484,14 +513,17 @@ def populate_instruments():
                 inst.index_memberships_json = json.dumps(item.get("index_memberships", []))
                 inst.aliases_json = json.dumps(item.get("aliases", []))
                 inst.updated_at = datetime.now(UTC)
-            count += 1
 
-        # 2. Check if EQUITY_L.csv is present
+        # 2. Check if EQUITY_L.csv is present or download it
+        if not LOCAL_EQUITY_L.exists():
+            download_equity_l_file()
+
         if LOCAL_EQUITY_L.exists():
             equity_l_records = ingest_equity_l_file(LOCAL_EQUITY_L)
+            logger.info(f"Ingesting {len(equity_l_records)} instruments from {LOCAL_EQUITY_L}...")
+            new_objs = []
             for item in equity_l_records:
-                existing = db.query(Instrument).filter(Instrument.symbol == item["symbol"]).first()
-                if not existing:
+                if item["symbol"] not in existing_symbols:
                     inst = Instrument(
                         symbol=item["symbol"],
                         isin=item.get("isin"),
@@ -508,8 +540,11 @@ def populate_instruments():
                         aliases_json=json.dumps(item.get("aliases", [])),
                         updated_at=datetime.now(UTC),
                     )
-                    db.add(inst)
+                    new_objs.append(inst)
+                    existing_symbols.add(item["symbol"])
                     count += 1
+            if new_objs:
+                db.bulk_save_objects(new_objs)
 
         db.commit()
         logger.info(f"Instrument Master populated: {count} instruments active.")

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from backend.app.core.config import settings
-from backend.app.db.models import MarketRiskRun, VaRValidationRun
+from backend.app.db.models import Instrument, MarketRiskRun, VaRValidationRun
 from backend.app.db.session import get_db
 from backend.app.schemas.market import (
     MarketRefreshRequest,
@@ -34,8 +34,8 @@ router = APIRouter(prefix="/market", tags=["Portfolio Market Risk Lab & VaR Vali
 
 
 @router.get("/universe")
-def get_market_universe():
-    """Return available market symbols, data coverage, currency, and provenance."""
+def get_market_universe(db: Session = Depends(get_db)):
+    """Return available market symbols, data coverage, currency, provenance, and instrument metadata."""
     manifest_file = settings.DATA_DIR / "manifests" / "market_manifest.json"
     snapshots_dir = settings.DATA_DIR / "market_snapshots"
 
@@ -54,6 +54,29 @@ def get_market_universe():
             symbols.append(sym_key)
             symbol_currencies[sym_key] = meta["currency"]
 
+    # Also pull from database Instrument master if populated
+    sectors = set()
+    cap_buckets = set()
+    indices = set()
+    try:
+        db_instruments = db.query(Instrument).filter(Instrument.is_active == True).all()
+        for inst in db_instruments:
+            if inst.symbol not in symbols:
+                symbols.append(inst.symbol)
+                symbol_currencies[inst.symbol] = inst.currency or "INR"
+            if inst.sector:
+                sectors.add(inst.sector)
+            if inst.cap_bucket:
+                cap_buckets.add(inst.cap_bucket)
+            if inst.index_memberships_json:
+                try:
+                    for idx in json.loads(inst.index_memberships_json):
+                        indices.add(idx)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     metadata = {
         "provider": "offline_snapshot_with_live_fallback",
         "supported_currencies": ["INR", "USD"],
@@ -61,22 +84,48 @@ def get_market_universe():
         "price_field": "adj_close",
         "supported_symbols": sorted(symbols),
         "symbol_currencies": symbol_currencies,
+        "total_instruments": len(symbols),
+        "sectors": sorted(list(sectors)),
+        "cap_buckets": sorted(list(cap_buckets)),
+        "indices": sorted(list(indices)),
         "manifest_present": manifest_file.exists()
     }
     return metadata
 
 
 @router.get("/search", response_model=StockSearchResponse)
-def search_market_stocks(q: str = "", limit: int = 15, currency: str | None = None):
+def search_market_stocks(
+    q: str = "",
+    limit: int = 15,
+    page: int = 1,
+    currency: str | None = None,
+    sector: str | None = None,
+    index: str | None = None,
+    cap_bucket: str | None = None,
+    db: Session = Depends(get_db),
+):
     """
-    Search supported stocks across NSE, BSE, and US markets.
-    Returns verified cached snapshots, known catalogue equities, candidate tickers, or remote provider quotes.
+    Search supported stocks across NSE, BSE, and US markets with sector, index, and cap_bucket filters.
+    Returns DB-backed ranked fuzzy search results with pagination.
     """
     service = MarketDataService()
-    results = service.search_symbols(query=q, limit=limit, currency_hint=currency)
+    results, total = service.search_symbols(
+        query=q,
+        limit=limit,
+        page=page,
+        currency_hint=currency,
+        sector=sector,
+        index=index,
+        cap_bucket=cap_bucket,
+        return_total=True,
+        db=db,
+    )
     return StockSearchResponse(
         query=q,
-        results=[StockSearchResult(**r) for r in results]
+        total=total,
+        page=page,
+        page_size=limit,
+        results=[StockSearchResult(**r) for r in results],
     )
 
 
