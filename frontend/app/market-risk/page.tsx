@@ -9,22 +9,17 @@ import {
   Activity,
   Info,
   AlertTriangle,
-  Plus,
   Trash2,
   DollarSign,
   Calendar,
   CheckCircle2,
   Search,
-  Building2,
-  Sparkles,
-  ExternalLink,
 } from "lucide-react";
 import {
   api,
   PortfolioRiskMetrics,
   StressScenarioResult,
   StockSearchResult,
-  SymbolValidateResponse,
 } from "@/lib/api";
 
 interface HoldingRow {
@@ -158,11 +153,11 @@ export default function MarketRiskPage() {
 
   // Debounced stock search
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
     const timer = setTimeout(async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        return;
+      }
       setSearchLoading(true);
       try {
         const res = await api.market.search(searchQuery.trim(), 10, currency);

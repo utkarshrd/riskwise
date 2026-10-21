@@ -33,13 +33,15 @@ def print_info():
     print(f"Data Root Directory: {DATA_DIR}")
     print(f"Raw Datasets:        {RAW_DIR}")
     print(f"Market Snapshots:    {SNAPSHOT_DIR}")
+    INDIAN_DATASET_DIR = REPO_ROOT / "dataset"
+    INDIAN_PROCESSED = DATA_DIR / "processed" / "credit_indian_cleaned.csv"
     print("\nDataset Requirements:")
-    print("  1. Credit Benchmark: UCI Default of Credit Card Clients (Taiwan 2005)")
-    print(f"     Source URL: {UCI_URL}")
-    print(f"     Status: {'Present' if TARGET_RAW_ZIP.exists() else 'Not downloaded (run with --download-uci)'}")
+    print("  1. Credit Model: Indian Banking & CIBIL Bureau Merged Dataset (51,336 records)")
+    print(f"     Source Files: {INDIAN_DATASET_DIR}/External_Cibil_Dataset.xlsx & Internal_Bank_Dataset.xlsx")
+    print(f"     Status:       {'Present' if INDIAN_PROCESSED.exists() else 'Needs preprocessing (run ml/train.py)'}")
     print("\n  2. Market Historical Prices:")
-    print("     Offline Snapshot file: data/market_snapshots/market_snapshot.csv")
-    print("     Status: " + ("Present" if (SNAPSHOT_DIR / "market_snapshot.csv").exists() else "Not yet generated (run scripts/build_market_snapshot.py in Milestone 4)"))
+    print("     Offline Snapshot Directory: data/market_snapshots/")
+    print("     Status:       " + ("Present (15 symbols)" if list(SNAPSHOT_DIR.glob("*.csv")) else "Not yet generated"))
     print("=" * 60)
 
 

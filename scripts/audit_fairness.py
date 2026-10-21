@@ -2,14 +2,15 @@
 """
 scripts/audit_fairness.py
 
-Performs demographic parity and fair lending audits on the RiskWise champion credit model.
-Evaluates AUC, approval rate, empirical default rate, and default recall across:
-- SEX (Male vs Female)
-- EDUCATION (Graduate School, University, High School, Others)
-- MARRIAGE (Married, Single, Others)
+Performs demographic parity and fair lending audits on the RiskWise Indian Credit Champion Model.
+Evaluates multiclass/tier metrics, approval rates, and adverse impact across:
+- GENDER (Male vs Female)
+- MARITALSTATUS (Married vs Single)
+- EDUCATION (Graduate, Post-Graduate, 12th, SSC, Professional, Under Graduate, Others)
 - AGE BANDS (<25, 25-34, 35-49, 50+)
 
 Computes Disparate Impact Ratios (DIR) per the EEOC / CFPB Four-Fifths (80%) Rule.
+Approval is defined as predicting Tier P1 or P2 (prime / near-prime).
 Outputs results to artifacts/evaluation/fairness_audit.json.
 """
 
@@ -21,41 +22,27 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from ml.data_validation import TARGET_COL
-from ml.preprocessing import engineer_features
 
-PROCESSED_DATA_PATH = REPO_ROOT / "data" / "processed" / "credit_default_cleaned.csv"
+PROCESSED_DATA_PATH = REPO_ROOT / "data" / "processed" / "credit_indian_cleaned.csv"
 MODEL_PATH = REPO_ROOT / "artifacts" / "models" / "credit_xgboost_v1.joblib"
 PREP_PATH = REPO_ROOT / "artifacts" / "models" / "credit_xgboost_v1_preprocessor.joblib"
 EVAL_FILE = REPO_ROOT / "artifacts" / "evaluation" / "model_comparison.json"
 AUDIT_OUTPUT_FILE = REPO_ROOT / "artifacts" / "evaluation" / "fairness_audit.json"
 
-
-def categorize_education(val: int | float) -> str:
-    if val == 1:
-        return "Graduate School"
-    if val == 2:
-        return "University"
-    if val == 3:
-        return "High School"
-    return "Others"
-
-
-def categorize_marriage(val: int | float) -> str:
-    if val == 1:
-        return "Married"
-    if val == 2:
-        return "Single"
-    return "Others"
+REV_TARGET_MAP = {0: "P1", 1: "P2", 2: "P3", 3: "P4"}
+TARGET_MAP = {"P1": 0, "P2": 1, "P3": 2, "P4": 3}
 
 
 def categorize_age(val: int | float) -> str:
+    if pd.isna(val):
+        return "Unknown"
     if val < 25:
         return "<25"
     if val <= 34:
@@ -65,151 +52,143 @@ def categorize_age(val: int | float) -> str:
     return "50+"
 
 
-def compute_group_metrics(df_sub: pd.DataFrame, y_true: np.ndarray, y_prob: np.ndarray, y_pred: np.ndarray) -> dict:
+def compute_group_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     size = len(y_true)
     if size == 0:
-        return {"sample_size": 0, "auc": 0.0, "approval_rate": 0.0, "default_rate": 0.0, "recall": 0.0}
+        return {
+            "sample_size": 0,
+            "accuracy": 0.0,
+            "macro_f1": 0.0,
+            "approval_rate": 0.0,
+            "empirical_approval_rate": 0.0,
+            "high_risk_rate": 0.0,
+        }
 
-    # Approval rate = fraction approved (predicted non-default: y_pred == 0)
-    approval_rate = float(np.mean(y_pred == 0))
-    default_rate = float(np.mean(y_true))
+    # Approval defined as class P1 or P2 (labels 0 or 1)
+    approved_pred = np.isin(y_pred, [0, 1])
+    approved_true = np.isin(y_true, [0, 1])
 
-    try:
-        auc = float(roc_auc_score(y_true, y_prob)) if len(np.unique(y_true)) > 1 else 0.5
-    except Exception:
-        auc = 0.5
+    approval_rate = float(np.mean(approved_pred))
+    empirical_approval = float(np.mean(approved_true))
+    high_risk_rate = float(np.mean(np.isin(y_pred, [2, 3])))
 
-    recall = float(recall_score(y_true, y_pred, zero_division=0))
+    acc = float(accuracy_score(y_true, y_pred))
+    macro_f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
 
     return {
         "sample_size": size,
-        "auc": round(auc, 4),
+        "accuracy": round(acc, 4),
+        "macro_f1": round(macro_f1, 4),
         "approval_rate": round(approval_rate, 4),
-        "default_rate": round(default_rate, 4),
-        "recall": round(recall, 4)
+        "empirical_approval_rate": round(empirical_approval, 4),
+        "high_risk_rate": round(high_risk_rate, 4),
     }
 
 
 def run_fairness_audit():
     print("=" * 70)
-    print("Running RiskWise Demographic & Fair Lending Audit...")
+    print("Running RiskWise Demographic & Fair Lending Audit on Indian Credit Model...")
     print("=" * 70)
 
     if not PROCESSED_DATA_PATH.exists():
-        raise FileNotFoundError(f"Cleaned benchmark dataset not found at {PROCESSED_DATA_PATH}")
+        raise FileNotFoundError(f"Cleaned Indian credit dataset not found at {PROCESSED_DATA_PATH}")
     if not MODEL_PATH.exists() or not PREP_PATH.exists():
         raise FileNotFoundError("Model or preprocessor artifact not found in artifacts/models/")
 
     # 1. Load Cleaned Dataset & Split
     df = pd.read_csv(PROCESSED_DATA_PATH)
-    y = df[TARGET_COL].values
+    y_raw = df[TARGET_COL].values
+    y = np.array([TARGET_MAP[val] for val in y_raw])
 
     _, temp_idx = train_test_split(df.index, test_size=0.30, random_state=42, stratify=y)
     _, test_idx = train_test_split(temp_idx, test_size=0.50, random_state=42, stratify=y[temp_idx])
     df_test = df.loc[test_idx].copy()
-    y_test = df_test[TARGET_COL].values
+    y_test = y[test_idx]
 
-    # 2. Load Model, Preprocessor, and Threshold
+    # 2. Load Model and Preprocessor
     model = joblib.load(MODEL_PATH)
     preprocessor = joblib.load(PREP_PATH)
 
-    threshold = 0.26
-    if EVAL_FILE.exists():
-        with open(EVAL_FILE, "r") as f:
-            eval_data = json.load(f)
-            threshold = eval_data.get("xgboost", {}).get("decision_threshold", 0.26)
-
     # 3. Predict on Test Set
-    df_eng = engineer_features(df_test, include_protected=False)
-    X_test_scaled = preprocessor.transform(df_eng)
-    y_prob = model.predict_proba(X_test_scaled)[:, 1]
-    y_pred = (y_prob >= threshold).astype(int)
+    X_test_trans = preprocessor.transform(df_test)
+    y_pred = model.predict(X_test_trans)
 
     # 4. Group Audits
-    # (a) Sex
-    sex_metrics = {
-        "Male (SEX=1)": compute_group_metrics(
-            df_test[df_test["SEX"] == 1],
-            y_test[df_test["SEX"] == 1],
-            y_prob[df_test["SEX"] == 1],
-            y_pred[df_test["SEX"] == 1]
-        ),
-        "Female (SEX=2)": compute_group_metrics(
-            df_test[df_test["SEX"] == 2],
-            y_test[df_test["SEX"] == 2],
-            y_prob[df_test["SEX"] == 2],
-            y_pred[df_test["SEX"] == 2]
-        )
-    }
+    # (a) Gender
+    gender_metrics = {}
+    for g, label in [("M", "Male (M)"), ("F", "Female (F)")]:
+        mask = (df_test["GENDER"] == g).values
+        gender_metrics[label] = compute_group_metrics(y_test[mask], y_pred[mask])
 
-    # (b) Education
-    edu_cats = df_test["EDUCATION"].apply(categorize_education)
+    # (b) Marital Status
+    marital_metrics = {}
+    for m in ["Married", "Single"]:
+        mask = (df_test["MARITALSTATUS"] == m).values
+        marital_metrics[m] = compute_group_metrics(y_test[mask], y_pred[mask])
+
+    # (c) Education
     education_metrics = {}
-    for cat in ["Graduate School", "University", "High School", "Others"]:
-        mask = (edu_cats == cat)
-        education_metrics[cat] = compute_group_metrics(df_test[mask], y_test[mask], y_prob[mask], y_pred[mask])
-
-    # (c) Marriage
-    marr_cats = df_test["MARRIAGE"].apply(categorize_marriage)
-    marriage_metrics = {}
-    for cat in ["Married", "Single", "Others"]:
-        mask = (marr_cats == cat)
-        marriage_metrics[cat] = compute_group_metrics(df_test[mask], y_test[mask], y_prob[mask], y_pred[mask])
+    for edu in ["GRADUATE", "POST-GRADUATE", "12TH", "SSC", "UNDER GRADUATE", "PROFESSIONAL", "OTHERS"]:
+        mask = (df_test["EDUCATION"] == edu).values
+        if mask.sum() > 0:
+            education_metrics[edu] = compute_group_metrics(y_test[mask], y_pred[mask])
 
     # (d) Age Bands
-    age_cats = df_test["AGE"].apply(categorize_age)
+    df_test["age_band"] = df_test["AGE"].apply(categorize_age)
     age_metrics = {}
-    for cat in ["<25", "25-34", "35-49", "50+"]:
-        mask = (age_cats == cat)
-        age_metrics[cat] = compute_group_metrics(df_test[mask], y_test[mask], y_prob[mask], y_pred[mask])
+    for band in ["<25", "25-34", "35-49", "50+"]:
+        mask = (df_test["age_band"] == band).values
+        if mask.sum() > 0:
+            age_metrics[band] = compute_group_metrics(y_test[mask], y_pred[mask])
 
     # 5. Compute Disparate Impact Ratios (DIR)
     # DIR = approval_rate(unprivileged) / approval_rate(privileged)
-    male_app = sex_metrics["Male (SEX=1)"]["approval_rate"]
-    female_app = sex_metrics["Female (SEX=2)"]["approval_rate"]
-    sex_dir = round(female_app / male_app, 4) if male_app > 0 else 1.0
+    male_app = gender_metrics.get("Male (M)", {}).get("approval_rate", 1.0)
+    female_app = gender_metrics.get("Female (F)", {}).get("approval_rate", 1.0)
+    gender_dir = round(female_app / male_app, 4) if male_app > 0 else 1.0
 
-    grad_app = education_metrics["Graduate School"]["approval_rate"]
-    hs_app = education_metrics["High School"]["approval_rate"]
-    education_dir = round(hs_app / grad_app, 4) if grad_app > 0 else 1.0
+    grad_app = education_metrics.get("GRADUATE", {}).get("approval_rate", 1.0)
+    ssc_app = education_metrics.get("SSC", {}).get("approval_rate", 1.0)
+    education_dir = round(ssc_app / grad_app, 4) if grad_app > 0 else 1.0
 
-    married_app = marriage_metrics["Married"]["approval_rate"]
-    single_app = marriage_metrics["Single"]["approval_rate"]
-    marriage_dir = round(single_app / married_app, 4) if married_app > 0 else 1.0
+    married_app = marital_metrics.get("Married", {}).get("approval_rate", 1.0)
+    single_app = marital_metrics.get("Single", {}).get("approval_rate", 1.0)
+    marital_dir = round(single_app / married_app, 4) if married_app > 0 else 1.0
 
-    ref_age_app = age_metrics["25-34"]["approval_rate"]
-    min_age_app = min(m["approval_rate"] for m in age_metrics.values())
+    ref_age_app = age_metrics.get("25-34", {}).get("approval_rate", 1.0)
+    min_age_app = min(m["approval_rate"] for m in age_metrics.values()) if age_metrics else 1.0
     age_dir = round(min_age_app / ref_age_app, 4) if ref_age_app > 0 else 1.0
 
-    all_dirs = [sex_dir, education_dir, marriage_dir, age_dir]
+    all_dirs = [gender_dir, education_dir, marital_dir, age_dir]
     four_fifths_rule_passed = all(d >= 0.80 for d in all_dirs)
+
+    overall_app = float(np.mean(np.isin(y_pred, [0, 1])))
 
     audit_result = {
         "audit_timestamp": datetime.now(UTC).isoformat(),
         "model_version": "credit_xgboost_v1",
-        "feature_set": "engineered_without_protected_attributes",
-        "decision_threshold": threshold,
+        "dataset_name": "Indian_Banking_CIBIL_Merged_2026",
         "sample_size": len(df_test),
-        "overall_approval_rate": round(float(np.mean(y_pred == 0)), 4),
+        "overall_approval_rate": round(overall_app, 4),
         "subgroup_metrics": {
-            "sex": sex_metrics,
+            "gender": gender_metrics,
+            "marital_status": marital_metrics,
             "education": education_metrics,
-            "marriage": marriage_metrics,
-            "age_band": age_metrics
+            "age_band": age_metrics,
         },
         "disparate_impact_ratios": {
-            "sex_female_vs_male": sex_dir,
-            "education_highschool_vs_gradschool": education_dir,
-            "marriage_single_vs_married": marriage_dir,
+            "gender_female_vs_male": gender_dir,
+            "education_ssc_vs_graduate": education_dir,
+            "marital_single_vs_married": marital_dir,
             "age_min_vs_reference_25_34": age_dir,
             "four_fifths_rule_threshold": 0.80,
-            "four_fifths_rule_compliant": four_fifths_rule_passed
+            "four_fifths_rule_compliant": four_fifths_rule_passed,
         },
         "fairness_summary": (
             f"Four-fifths fair lending rule compliant: {four_fifths_rule_passed}. "
-            f"Sex DIR = {sex_dir:.2f}, Education DIR = {education_dir:.2f}, "
-            f"Marriage DIR = {marriage_dir:.2f}, Age DIR = {age_dir:.2f}."
-        )
+            f"Gender DIR = {gender_dir:.2f}, Education DIR = {education_dir:.2f}, "
+            f"Marital DIR = {marital_dir:.2f}, Age DIR = {age_dir:.2f}."
+        ),
     }
 
     AUDIT_OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)

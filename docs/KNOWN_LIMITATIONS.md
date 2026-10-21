@@ -5,9 +5,9 @@ This document details explicit technical and methodology limitations of RiskWise
 ---
 
 ## 1. Credit Risk Benchmark Dataset
-- **Proxy Nature:** The credit dataset utilizes historical Taiwanese credit card client records from 2005. It is solely an academic reference benchmark.
-- **No Indian Credit Score Equivalent:** The output risk score and probability estimates do NOT correspond to Indian credit bureaus (e.g., CIBIL scores) or Indian banking default likelihoods.
-- **Educational Framing:** All credit outputs represent relative risk classifications within the context of the dataset distribution.
+- **Dataset Scope:** The credit risk subsystem is trained on the Indian Banking & CIBIL Bureau Merged Dataset (51,336 records) with 4-class multi-tier classification (`Approved_Flag`: P1–P4).
+- **Target Leakage Safeguard:** `Credit_Score` (bureau cutoff score) is strictly omitted from the production champion feature suite (42 features) because its inclusion produced an artificial ROC-AUC of 0.9999 due to direct cutoff assignment in underwriting. The champion model evaluates risk strictly from trade-line repayment and inquiry behavior.
+- **Decision Support & Educational Framing:** Predicted credit tiers provide relative risk ranking and local TreeSHAP attribution for analyst decision-support. They do NOT constitute an automated sole-decision statutory underwriting system or an official bureau score.
 
 ---
 

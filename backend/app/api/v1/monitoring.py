@@ -55,11 +55,8 @@ def run_drift_monitoring(request: DriftRunRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="No model version found for drift analysis.")
 
     # Load baseline dataset
-    if "indian" in str(getattr(model_rec, "dataset_id", "")).lower() or "indian" in str(getattr(model_rec, "version", "")).lower():
-        data_file = settings.DATA_DIR / "processed" / "credit_indian_cleaned.csv"
-        if not data_file.exists():
-            data_file = settings.DATA_DIR / "processed" / "credit_default_cleaned.csv"
-    else:
+    data_file = settings.DATA_DIR / "processed" / "credit_indian_cleaned.csv"
+    if not data_file.exists():
         data_file = settings.DATA_DIR / "processed" / "credit_default_cleaned.csv"
 
     if not data_file.exists():

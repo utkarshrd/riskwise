@@ -155,7 +155,7 @@ def test_persistence_registry_and_promotion_audit():
             id=test_challenger_id,
             model_name="challenger_rf",
             version=f"rf_v_{test_challenger_id[:6]}",
-            dataset_id="taiwan_credit_2005",
+            dataset_id="Indian_Banking_CIBIL_Merged_2026",
             feature_schema_version="v1",
             preprocessing_artifact="artifacts/models/credit_preprocessor.joblib",
             model_artifact="artifacts/models/credit_xgboost_model.joblib",

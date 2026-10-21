@@ -44,9 +44,8 @@ def get_methodology_disclosures():
             ),
             "category_note": (
                 "P1–P4 are the original Approved_Flag column labels from the dataset. "
-                "They are relative credit-quality tiers internal to this dataset. "
-                "They do NOT correspond to regulated CIBIL score bands, "
-                "UCI Taiwan credit-card categories, or any official Indian default classification."
+                "They do NOT correspond to regulated CIBIL score bands "
+                "or any official Indian default classification."
             ),
             "split": "70% train / 15% validation / 15% test, stratified by Approved_Flag, random_state=42.",
             "algorithms": [

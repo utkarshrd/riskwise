@@ -24,7 +24,7 @@ export default function MethodologyPage() {
             <h3>Credit Benchmark Scope & Limitations</h3>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            The credit-risk subsystem trains on the UCI Default of Credit Card Clients dataset (Taiwan, 2005). The output score is an educational relative indicator. It does NOT claim to predict Indian default probabilities, produce calibrated credit bureau ratings (such as CIBIL scores), or serve as an automated loan underwriting decision engine.
+            The credit-risk subsystem trains on the Indian Banking & CIBIL Bureau Merged dataset (51,336 records). The output tiers (P1-P4) provide educational relative risk indicators and analyst decision support. It does NOT serve as an automated sole-decision underwriting system.
           </p>
         </div>
 

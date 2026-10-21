@@ -47,7 +47,7 @@ For in-depth architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 │   └── pyproject.toml           # Project metadata & linter configuration
 ├── frontend/                    # Next.js App Router application
 ├── data/                        # Datasets, snapshots, manifests
-│   ├── raw/                     # Raw downloaded benchmarks (UCI Credit)
+│   ├── raw/                     # Raw input benchmarks
 │   ├── processed/               # Cleaned data partitions
 │   ├── market_snapshots/        # Local offline daily price snapshots
 │   └── manifests/               # Data verification manifests
@@ -118,9 +118,6 @@ cd ..
 ```bash
 # Check current dataset and market snapshot status
 python scripts/setup_data.py --info
-
-# (Optional) Download the UCI Credit Card Clients benchmark dataset
-python scripts/setup_data.py --download-uci
 ```
 
 ---

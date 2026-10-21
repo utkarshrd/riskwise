@@ -13,10 +13,8 @@ import {
   HelpCircle,
   Filter,
   Search,
-  Plus,
   Trash2,
   RefreshCw,
-  Building2,
 } from "lucide-react";
 import {
   api,
@@ -137,11 +135,11 @@ export default function VaRValidationPage() {
 
   // Debounced stock search
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
     const timer = setTimeout(async () => {
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+        return;
+      }
       setSearchLoading(true);
       try {
         const res = await api.market.search(searchQuery.trim(), 10, currency);

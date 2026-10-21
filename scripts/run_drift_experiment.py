@@ -28,7 +28,9 @@ import pandas as pd
 
 from backend.app.services.monitoring.engine import MonitoringEngine
 
-PROCESSED_DATA_PATH = REPO_ROOT / "data" / "processed" / "credit_default_cleaned.csv"
+PROCESSED_DATA_PATH = REPO_ROOT / "data" / "processed" / "credit_indian_cleaned.csv"
+if not PROCESSED_DATA_PATH.exists():
+    PROCESSED_DATA_PATH = REPO_ROOT / "data" / "processed" / "credit_default_cleaned.csv"
 
 
 def run_synthetic_drift_experiment():

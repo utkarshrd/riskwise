@@ -564,7 +564,7 @@ class RiskCopilotService:
         elif any(k in msg for k in ["portfolio risk", "market risk", "volatility", "drawdown", "expected shortfall", "cvar", "asset correlation", "equal weight"]) or any(t in msg for t in ["reliance", "nifty", "spy", "aapl", "msft", "googl", "tcs"]):
             intent = "ANALYZE_PORTFOLIO_RISK"
             conf = max(conf, 0.92)
-        elif any(k in msg for k in ["credit score", "shap", "feature contribution", "default prediction", "taiwan dataset"]):
+        elif any(k in msg for k in ["credit score", "shap", "feature contribution", "default prediction", "indian credit", "cibil"]):
             intent = "CREDIT_RISK_EXPLAIN"
             conf = max(conf, 0.92)
         elif any(k in msg for k in ["basel", "rbi", "sebi", "regulation", "framework"]):

@@ -368,7 +368,7 @@ def main():
             id="mod_cand_verify_002",
             model_name="challenger_candidate",
             version="credit_cand_v2",
-            dataset_id="taiwan_credit_2005",
+            dataset_id="Indian_Banking_CIBIL_Merged_2026",
             feature_schema_version="v1",
             preprocessing_artifact="artifacts/models/credit_xgboost_v1_preprocessor.joblib",
             model_artifact="artifacts/models/credit_xgboost_v1.joblib",

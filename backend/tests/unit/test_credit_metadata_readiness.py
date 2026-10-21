@@ -27,7 +27,7 @@ def test_credit_score_rejects_incomplete_metadata():
             id="test-incomplete-meta-model",
             model_name="xgboost",
             version="credit_incomplete_v1",
-            dataset_id="UCI_Default_Credit_Taiwan_2005",
+            dataset_id="Indian_Banking_CIBIL_Merged_2026",
             feature_schema_version="v1.0",
             preprocessing_artifact=prev_active.preprocessing_artifact if prev_active else "dummy",
             model_artifact=prev_active.model_artifact if prev_active else "dummy",

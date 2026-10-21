@@ -21,7 +21,7 @@ const modules = [
     icon: CreditCard,
     status: "Pending M1 Training",
     statusColor: "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
-    provenance: "UCI Credit Card Clients (Taiwan 2005) Benchmark",
+    provenance: "Indian Banking & CIBIL Bureau Dataset",
     actionText: "Configure Data Pipeline",
   },
   {
