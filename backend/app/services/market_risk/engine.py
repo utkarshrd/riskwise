@@ -97,7 +97,7 @@ class MarketRiskEngine:
         Strictly reads 'adj_close' (split and dividend adjusted prices).
         Validates strictly positive prices, single currency uniformity, and at least 30 observations.
         """
-        prices, _, _ = self.data_service.load_aligned_prices(symbols, allow_live=allow_live)
+        prices, _, _, _ = self.data_service.load_aligned_prices(symbols, allow_live=allow_live)
         return prices
 
     @staticmethod
@@ -218,7 +218,7 @@ class MarketRiskEngine:
             )
 
         # Load prices via unified data service
-        prices, data_src, _ = self.data_service.load_aligned_prices(symbols, allow_live=True)
+        prices, data_src, _, _ = self.data_service.load_aligned_prices(symbols, allow_live=True)
         if data_source_mode == "offline_snapshot":
             data_source_mode = data_src
 
