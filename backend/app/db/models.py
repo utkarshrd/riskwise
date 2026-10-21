@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.db.session import Base
@@ -155,3 +155,41 @@ class CopilotSession(Base):
     last_intent: Mapped[str | None] = mapped_column(String(50), nullable=True)
     parameters_json: Mapped[str] = mapped_column(Text, default="{}")
     history_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class Instrument(Base):
+    __tablename__ = "instruments"
+
+    symbol: Mapped[str] = mapped_column(String(50), primary_key=True)
+    isin: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    series: Mapped[str] = mapped_column(String(10), default="EQ")
+    currency: Mapped[str] = mapped_column(String(10), default="INR")
+    exchange: Mapped[str] = mapped_column(String(20), default="NSE")
+    sector: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    industry: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    listing_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    cap_bucket: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    index_memberships_json: Mapped[str] = mapped_column(Text, default="[]")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    aliases_json: Mapped[str] = mapped_column(Text, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class DailyPrice(Base):
+    __tablename__ = "daily_prices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    date: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    open: Mapped[float | None] = mapped_column(Float, nullable=True)
+    high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    close: Mapped[float | None] = mapped_column(Float, nullable=True)
+    adj_close: Mapped[float] = mapped_column(Float, nullable=False)
+    volume: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        Index("ix_daily_prices_symbol_date", "symbol", "date", unique=True),
+    )
+

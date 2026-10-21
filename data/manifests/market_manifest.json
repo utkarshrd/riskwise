@@ -19,7 +19,8 @@
     "ADANIENT.NS",
     "TRENT.NS",
     "ETERNAL.NS",
-    "TMCV.NS"
+    "TMCV.NS",
+    "USDINR=X"
   ],
   "snapshots": {
     "NIFTYBEES.NS": {
@@ -216,6 +217,19 @@
       "anomalies_flagged": [],
       "file_path": "data\\market_snapshots\\TMCV.NS.csv",
       "checksum": "0a877ea97d95cae030227172381cdb22fb0b9240482f30af57caddd70e4581f3"
+    },
+    "USDINR=X": {
+      "symbol": "USDINR=X",
+      "provider_symbol": "USDINR=X",
+      "name": "USD / INR Foreign Exchange Rate",
+      "currency": "INR",
+      "start_date": "2024-10-21",
+      "end_date": "2026-10-21",
+      "observations": 518,
+      "nan_sessions_dropped": 0,
+      "anomalies_flagged": [],
+      "file_path": "data\\\\market_snapshots\\\\USDINR=X.csv",
+      "checksum": "cdc16c15b54334ee2fe7fab8efa2f35140b60db7da0408030570d1c22856fc21"
     }
   }
 }

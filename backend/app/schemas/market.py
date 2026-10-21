@@ -16,6 +16,8 @@ class PortfolioAnalyzeRequest(BaseModel):
     portfolio_value: float | None = Field(default=None, gt=0.0, description="Optional total monetary value of portfolio")
     lookback_days: int | None = Field(default=None, ge=30, description="Optional lookback period in days (minimum 30)")
     return_method: str = Field(default="simple", description="'simple' or 'log'")
+    fx_conversion: bool = Field(default=False, description="Explicit opt-in to convert mixed-currency assets using historical FX rates")
+    benchmark_symbol: str | None = Field(default=None, description="Optional custom benchmark symbol (defaults to ^NSEI for INR, SPY for USD)")
 
 
 class PortfolioAnalyzeResponse(BaseModel):
@@ -48,11 +50,26 @@ class PortfolioAnalyzeResponse(BaseModel):
     asset_correlations: dict[str, dict[str, float]]
     loss_convention: str
     assumptions: dict[str, Any]
+    benchmark_symbol: str | None = None
+    benchmark_name: str | None = None
+    benchmark_volatility: float | None = None
+    beta_to_benchmark: float | None = None
+    correlation_to_benchmark: float | None = None
+    fx_converted: bool = False
+    data_freshness: dict[str, Any] | None = None
 
 
 class MarketRefreshRequest(BaseModel):
     fetch_live: bool = Field(default=False, description="Attempt live download from Yahoo Finance via yfinance if true")
     symbols: list[str] | None = Field(default=None, description="Optional subset of symbols to refresh")
+
+
+class MarketRefreshStatusResponse(BaseModel):
+    status: str
+    job_id: str | None = None
+    refreshed_symbols: list[str] = []
+    errors: dict[str, str] = {}
+    last_refresh: str | None = None
 
 
 class VaRValidationHistoryItem(BaseModel):
@@ -138,10 +155,18 @@ class StockSearchResult(BaseModel):
     status: str = "known"  # 'verified', 'known', 'valid_remote'
     alias_of: str | None = None
     note: str | None = None
+    isin: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    cap_bucket: str | None = None
+    index_memberships: list[str] | None = None
 
 
 class StockSearchResponse(BaseModel):
     query: str
+    total: int = 0
+    page: int = 1
+    page_size: int = 15
     results: list[StockSearchResult]
 
 
