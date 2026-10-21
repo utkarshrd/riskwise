@@ -136,3 +136,13 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Context:** Market search previously used a static dictionary of ~12 symbols. The platform requires fuzzy searching across the full official NSE universe with sector, index, and cap_bucket filtering.
 - **Decision:** Download official NSE equity master from `https://archives.nseindia.com/content/equities/EQUITY_L.csv` and ingest all 2,608 official listed equity instruments into the SQLite `instruments` table with sector, industry, series, ISIN, and aliases, combined with benchmark indices (`^NSEI`, `SPY`) and curated ETFs. Expose via `/market/search` with pagination (`page`, `limit`), sector/index/cap_bucket filters, and enrich `/market/universe` with database-backed instrument counts and sector/index facets while maintaining backward compatibility.
 - **Consequences:** 2,617 active verified instruments searchable with sub-second response times without inventing fake symbols.
+
+---
+
+## ADR-013: Lazy Price Loading, Quality Validation, and Freshness Tracking
+- **Date:** 2026-10-22 (Tier A Milestone)
+- **Status:** Accepted
+- **Context:** Any official NSE symbol without a pre-baked snapshot should load lazily on-demand with automated quality validation.
+- **Decision:** Implement lazy loading in `MarketDataService.get_symbol_price_history` using `yfinance` with exponential retry/backoff. Validate that prices are strictly positive, reject time series with excessive gaps (>45 calendar days), flag trading gaps (>14 days) and staleness (>180 days), cache validated price series to local CSV and SQLite `daily_prices`, and record freshness metadata (`last_sync_timestamp`, `freshness_status`, `max_gap_days`) in `market_manifest.json` and `Instrument.updated_at`. Guard database lookups by `_is_default_snapshots_dir` to maintain test isolation.
+- **Consequences:** Eliminates manual snapshot generation for new symbols while guaranteeing data quality and auditability.
+

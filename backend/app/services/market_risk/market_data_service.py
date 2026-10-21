@@ -36,9 +36,11 @@ class MarketDataService:
         if snapshots_dir is None:
             self.snapshots_dir = settings.DATA_DIR / "market_snapshots"
             self.manifest_path = settings.DATA_DIR / "manifests" / "market_manifest.json"
+            self._is_default_snapshots_dir = True
         else:
             self.snapshots_dir = snapshots_dir
             self.manifest_path = manifest_path or (snapshots_dir.parent / "manifests" / "market_manifest.json")
+            self._is_default_snapshots_dir = False
 
         self.snapshots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -215,7 +217,11 @@ class MarketDataService:
         date_strings = dates.dt.strftime("%Y-%m-%d") if hasattr(dates, "dt") else [str(d)[:10] for d in dates]
         adj_prices = pd.to_numeric(raw_df[adj_close_col], errors="coerce")
         raw_prices = pd.to_numeric(raw_df[close_col], errors="coerce") if close_col else adj_prices
-        volumes = pd.to_numeric(raw_df[vol_col], errors="coerce").fillna(0) if vol_col else [0] * len(adj_prices)
+        volumes = (
+            pd.to_numeric(raw_df[vol_col], errors="coerce").fillna(0)
+            if vol_col
+            else pd.Series(0, index=adj_prices.index)
+        )
 
         clean_dict: dict[str, Any] = {
             "date": date_strings,
@@ -238,6 +244,24 @@ class MarketDataService:
         if (clean_df["adj_close"] <= 0).any() or len(clean_df) < 10:
             raise ValueError(f"Provider returned invalid or non-positive price values for '{provider_sym}'.")
 
+        # Gap and staleness validation
+        dates_dt = pd.to_datetime(clean_df["date"]).sort_values()
+        diffs = dates_dt.diff().dt.days
+        max_gap = int(diffs.max()) if len(diffs) > 1 and pd.notna(diffs.max()) else 0
+        anomalies: list[str] = []
+        if max_gap > 45:
+            raise ValueError(
+                f"Excessive price gap detected for '{provider_sym}': {max_gap} calendar days between trading observations exceeds 45-day threshold."
+            )
+        elif max_gap > 14:
+            anomalies.append(f"Trading gap: {max_gap} calendar days")
+
+        latest_date = dates_dt.max()
+        days_stale = (pd.Timestamp.now().normalize() - latest_date.normalize()).days
+        if days_stale > 180:
+            anomalies.append(f"Stale price data: {days_stale} calendar days since latest observation {latest_date.date()}")
+        freshness_status = "stale" if days_stale > 30 else "fresh"
+
         # 1. Save to CSV snapshot
         target_path = self.snapshots_dir / f"{file_stem}.csv"
         clean_df.to_csv(target_path, index=False)
@@ -245,7 +269,18 @@ class MarketDataService:
         # 2. Save to SQLite DB
         self._save_prices_to_db(canonical_sym, clean_df)
 
-        # 3. Update market manifest
+        # 3. Update Instrument record freshness in DB
+        try:
+            db_inst = SessionLocal()
+            inst_obj = db_inst.query(Instrument).filter(Instrument.symbol == canonical_sym).first()
+            if inst_obj:
+                inst_obj.updated_at = datetime.now(UTC)
+                db_inst.commit()
+            db_inst.close()
+        except Exception as e:
+            logger.warning("Could not update Instrument freshness in DB for %s: %s", canonical_sym, e)
+
+        # 4. Update market manifest with freshness and anomaly metrics
         if self.manifest_path and self.manifest_path.exists():
             try:
                 with open(target_path, "rb") as bf:
@@ -264,7 +299,10 @@ class MarketDataService:
                     "end_date": str(clean_df["date"].max()),
                     "observations": len(clean_df),
                     "nan_sessions_dropped": 0,
-                    "anomalies_flagged": [],
+                    "anomalies_flagged": anomalies,
+                    "max_gap_days": max_gap,
+                    "freshness_status": freshness_status,
+                    "last_sync_timestamp": datetime.now(UTC).isoformat(),
                     "file_path": rel_path,
                     "checksum": checksum,
                 }
@@ -317,10 +355,11 @@ class MarketDataService:
                     e,
                 )
 
-        # 2. Check SQLite DB (production fast path when no local CSV)
-        db_df = self._read_cached_db(canonical_sym)
-        if db_df is not None and len(db_df) >= 30:
-            return db_df, "offline_snapshot"
+        # 2. Check SQLite DB (production fast path when using default production directory and no local CSV)
+        if self._is_default_snapshots_dir:
+            db_df = self._read_cached_db(canonical_sym)
+            if db_df is not None and len(db_df) >= 30:
+                return db_df, "offline_snapshot"
 
         # 3. Live fetch via yfinance
         if allow_live:
