@@ -16,6 +16,8 @@ class PortfolioAnalyzeRequest(BaseModel):
     portfolio_value: float | None = Field(default=None, gt=0.0, description="Optional total monetary value of portfolio")
     lookback_days: int | None = Field(default=None, ge=30, description="Optional lookback period in days (minimum 30)")
     return_method: str = Field(default="simple", description="'simple' or 'log'")
+    var_method: str = Field(default="historical", description="Selected VaR method: 'historical', 'gaussian', 'student_t', 'cornish_fisher', 'ewma', 'monte_carlo', 'garch', 'fhs'")
+    horizon_days: int = Field(default=1, ge=1, le=30, description="VaR holding horizon in trading days (default: 1)")
     fx_conversion: bool = Field(default=False, description="Explicit opt-in to convert mixed-currency assets using historical FX rates")
     benchmark_symbol: str | None = Field(default=None, description="Optional custom benchmark symbol (defaults to ^NSEI for INR, SPY for USD)")
 
@@ -50,6 +52,17 @@ class PortfolioAnalyzeResponse(BaseModel):
     asset_correlations: dict[str, dict[str, float]]
     loss_convention: str
     assumptions: dict[str, Any]
+    selected_var_method: str = "historical"
+    horizon_days: int = 1
+    selected_var_95: float | None = None
+    selected_var_99: float | None = None
+    selected_es_95: float | None = None
+    selected_es_99: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    drawdown_table: list[dict[str, Any]] | None = None
+    component_var_pct: dict[str, float] | None = None
+    marginal_var: dict[str, float] | None = None
     benchmark_symbol: str | None = None
     benchmark_name: str | None = None
     benchmark_volatility: float | None = None

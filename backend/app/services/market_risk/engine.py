@@ -10,6 +10,7 @@ from scipy import stats
 # Phase 2 risk engine (canonical implementation)
 from backend.app.services.market_risk.risk import var_models as _vm
 from backend.app.services.market_risk.risk import returns as _ret
+from backend.app.services.market_risk.risk import attribution as _attr
 
 
 class Holding(BaseModel):
@@ -48,6 +49,17 @@ class PortfolioRiskMetrics(BaseModel):
     asset_correlations: dict[str, dict[str, float]]
     loss_convention: str = "Loss is positive magnitude (Loss = -Return)"
     assumptions: dict[str, Any]
+    selected_var_method: str = "historical"
+    horizon_days: int = 1
+    selected_var_95: float | None = None
+    selected_var_99: float | None = None
+    selected_es_95: float | None = None
+    selected_es_99: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    drawdown_table: list[dict[str, Any]] | None = None
+    component_var_pct: dict[str, float] | None = None
+    marginal_var: dict[str, float] | None = None
 
 
 class StressScenario(BaseModel):
@@ -163,10 +175,19 @@ class MarketRiskEngine:
         lookback_days: int | None = None,
         return_method: str = "simple",
         portfolio_value: float | None = None,
-        data_source_mode: str = "offline_snapshot"
+        data_source_mode: str = "offline_snapshot",
+        var_method: str = "historical",
+        horizon_days: int = 1,
     ) -> PortfolioRiskMetrics:
         if not holdings:
             raise ValueError("Portfolio must contain at least one holding.")
+
+        valid_methods = {"historical", "gaussian", "student_t", "cornish_fisher", "ewma", "monte_carlo", "garch", "fhs"}
+        method_norm = (var_method or "historical").lower().strip()
+        if method_norm not in valid_methods:
+            raise ValueError(f"Unknown VaR method '{var_method}'. Supported methods: {sorted(list(valid_methods))}")
+        if horizon_days < 1 or horizon_days > 30:
+            raise ValueError("horizon_days must be between 1 and 30.")
 
         # Canonical symbol normalization and duplicate checking
         canonical_map = {h.symbol: normalize_ticker(h.symbol)["canonical_symbol"] for h in holdings}
@@ -241,12 +262,11 @@ class MarketRiskEngine:
         portfolio_losses = -portfolio_returns  # Loss convention: loss is positive
 
         # 1. Volatility (Annualized using 252 trading day convention)
-        # Delegate to risk.returns for consistency with Phase 2 API
-        port_returns_series = pd.Series(portfolio_returns.values)
+        port_returns_series = pd.Series(portfolio_returns.values, index=returns_df.index)
         daily_std = float(portfolio_returns.std(ddof=1))
         annualized_vol = _ret.annualized_volatility(port_returns_series)
 
-        # 2. Historical VaR / ES — delegate to risk.var_models (historical method)
+        # 2. Historical VaR / ES
         losses_arr = -portfolio_returns.values  # positive = loss
         hist_res_95 = _vm.estimate_var(losses_arr, method="historical", confidence=0.95, bootstrap=False)
         hist_res_99 = _vm.estimate_var(losses_arr, method="historical", confidence=0.99, bootstrap=False)
@@ -255,17 +275,50 @@ class MarketRiskEngine:
         es_95 = hist_res_95.es
         es_99 = hist_res_99.es
 
-        # 3. Parametric VaR (Gaussian) — delegate to risk.var_models
+        # 3. Parametric VaR (Gaussian)
         mean_ret = float(portfolio_returns.mean())
         gauss_res_95 = _vm.estimate_var(losses_arr, method="gaussian", confidence=0.95, bootstrap=False)
         gauss_res_99 = _vm.estimate_var(losses_arr, method="gaussian", confidence=0.99, bootstrap=False)
         param_var_95 = gauss_res_95.var
         param_var_99 = gauss_res_99.var
 
-        # 4. Maximum Drawdown
-        max_drawdown = abs(_ret.max_drawdown(pd.Series(portfolio_returns.values)))
+        # 4. User-Selected VaR Method & Horizon
+        sel_res_95 = _vm.estimate_var(losses_arr, method=method_norm, confidence=0.95, horizon_days=horizon_days, bootstrap=False)
+        sel_res_99 = _vm.estimate_var(losses_arr, method=method_norm, confidence=0.99, horizon_days=horizon_days, bootstrap=False)
+        sel_var_95 = round(float(sel_res_95.var), 4)
+        sel_var_99 = round(float(sel_res_99.var), 4)
+        sel_es_95 = round(float(sel_res_95.es), 4)
+        sel_es_99 = round(float(sel_res_99.es), 4)
 
-        # 5. Correlation matrix
+        # 5. Performance and Drawdown metrics
+        rf_rate = _ret.DEFAULT_RISK_FREE_INR if currency.upper() == "INR" else _ret.DEFAULT_RISK_FREE_USD
+        sharpe = round(_ret.sharpe_ratio(port_returns_series, risk_free_annual=rf_rate), 4)
+        sortino = round(_ret.sortino_ratio(port_returns_series, risk_free_annual=rf_rate), 4)
+        max_drawdown = abs(_ret.max_drawdown(port_returns_series))
+
+        dd_periods = _ret.drawdown_table(port_returns_series, top_n=5)
+        dd_table_data = [
+            {
+                "peak_date": p.peak_date,
+                "trough_date": p.trough_date,
+                "recovery_date": p.recovery_date,
+                "depth": round(p.depth, 4),
+                "duration_days": p.duration_days,
+                "recovery_days": p.recovery_days,
+            }
+            for p in dd_periods
+        ]
+
+        # 6. Component & Marginal VaR Risk Attribution
+        try:
+            attr_res = _attr.compute_attribution(returns_df, symbols, weights, confidence=0.95)
+            comp_var_pct = {k: round(v, 4) for k, v in attr_res.component_var_pct.items()}
+            marg_var = {k: round(v, 4) for k, v in attr_res.marginal_var.items()}
+        except Exception:
+            comp_var_pct = None
+            marg_var = None
+
+        # 7. Correlation matrix
         corr_matrix = returns_df[symbols].corr().fillna(0.0).to_dict()
 
         start_dt = str(prices.index[0].date())
@@ -294,7 +347,10 @@ class MarketRiskEngine:
             "loss_convention": "Loss is positive magnitude (Loss = -Return). VaR is the loss threshold not exceeded at (1-alpha) confidence.",
             "data_source_mode": data_source_mode,
             "portfolio_value": effective_portfolio_value,
-            "risk_engine": "market_risk.risk (Phase 2)"
+            "risk_engine": "market_risk.risk (Phase 2)",
+            "selected_var_method": method_norm,
+            "horizon_days": horizon_days,
+            "risk_free_rate": rf_rate,
         }
 
         return PortfolioRiskMetrics(
@@ -329,7 +385,18 @@ class MarketRiskEngine:
                 for k, v in corr_matrix.items()
             },
             loss_convention="Loss is positive magnitude (Loss = -Return)",
-            assumptions=assumptions
+            assumptions=assumptions,
+            selected_var_method=method_norm,
+            horizon_days=horizon_days,
+            selected_var_95=sel_var_95,
+            selected_var_99=sel_var_99,
+            selected_es_95=sel_es_95,
+            selected_es_99=sel_es_99,
+            sharpe_ratio=sharpe,
+            sortino_ratio=sortino,
+            drawdown_table=dd_table_data,
+            component_var_pct=comp_var_pct,
+            marginal_var=marg_var,
         )
 
 

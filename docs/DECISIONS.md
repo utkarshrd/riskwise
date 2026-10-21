@@ -146,3 +146,13 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Decision:** Implement lazy loading in `MarketDataService.get_symbol_price_history` using `yfinance` with exponential retry/backoff. Validate that prices are strictly positive, reject time series with excessive gaps (>45 calendar days), flag trading gaps (>14 days) and staleness (>180 days), cache validated price series to local CSV and SQLite `daily_prices`, and record freshness metadata (`last_sync_timestamp`, `freshness_status`, `max_gap_days`) in `market_manifest.json` and `Instrument.updated_at`. Guard database lookups by `_is_default_snapshots_dir` to maintain test isolation.
 - **Consequences:** Eliminates manual snapshot generation for new symbols while guaranteeing data quality and auditability.
 
+---
+
+## ADR-014: Multi-Model Risk Analytics, Method Selector, and Horizon Scaling
+- **Date:** 2026-10-22 (Tier A Milestone)
+- **Status:** Accepted
+- **Context:** Users need to select between 8 parametric, non-parametric, and semi-parametric VaR models with configurable horizons (1-30 days), alongside comprehensive performance and risk attribution metrics.
+- **Decision:** Expose `var_method` and `horizon_days` on `POST /market/portfolio/analyze`. Calculate chosen model VaR/ES, annualized Sharpe and Sortino ratios using jurisdiction-appropriate risk-free rate, top-5 peak-to-trough drawdown table, and component/marginal VaR decomposition. All methods verified against analytic closed-form formulas (Gaussian, Student-t, Cornish-Fisher, EWMA, Euler allocation).
+- **Consequences:** Gives institutional-grade risk attribution and multi-model flexibility while maintaining complete backward compatibility with existing API contracts.
+
+

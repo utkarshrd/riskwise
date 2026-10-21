@@ -234,14 +234,21 @@ def drawdown_table(daily_ret: pd.Series, top_n: int = 5) -> list[DrawdownPeriod]
         end_visited = recovery_idx if recovery_idx is not None else len(dd) - 1
         visited.update(range(peak_idx, end_visited + 1))
 
+        def _to_date_str(d: Any) -> str:
+            return str(d.date()) if hasattr(d, "date") else str(d)
+
+        def _diff_days(d2: Any, d1: Any) -> int:
+            diff = d2 - d1
+            return int(diff.days) if hasattr(diff, "days") else int(diff)
+
         depth = float(dd.iloc[trough_idx])
-        duration = int((dates[trough_idx] - dates[peak_idx]).days)
-        rec_days = int((dates[recovery_idx] - dates[trough_idx]).days) if recovery_idx is not None else None
-        rec_date = str(dates[recovery_idx].date()) if recovery_idx is not None else None
+        duration = _diff_days(dates[trough_idx], dates[peak_idx])
+        rec_days = _diff_days(dates[recovery_idx], dates[trough_idx]) if recovery_idx is not None else None
+        rec_date = _to_date_str(dates[recovery_idx]) if recovery_idx is not None else None
 
         periods.append(DrawdownPeriod(
-            peak_date=str(dates[peak_idx].date()),
-            trough_date=str(dates[trough_idx].date()),
+            peak_date=_to_date_str(dates[peak_idx]),
+            trough_date=_to_date_str(dates[trough_idx]),
             recovery_date=rec_date,
             depth=round(depth, 4),
             duration_days=duration,

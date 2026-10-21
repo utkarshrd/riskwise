@@ -157,7 +157,9 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest, db: Session = Depends(ge
             currency=request.currency,
             lookback_days=request.lookback_days,
             return_method=request.return_method,
-            portfolio_value=request.portfolio_value
+            portfolio_value=request.portfolio_value,
+            var_method=request.var_method,
+            horizon_days=request.horizon_days,
         )
 
         # Persist run to database
