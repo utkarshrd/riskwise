@@ -1,0 +1,450 @@
+// RiskWise API client - connects to FastAPI backend at localhost:8000
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface HealthResponse {
+  status: string;
+  timestamp: string;
+}
+
+export interface SystemStatus {
+  status: string;
+  offline_mode: boolean;
+  credit_model_loaded: boolean;
+  active_model_version: string | null;
+  market_snapshot_loaded: boolean;
+  market_tickers_available: string[];
+  rag_corpus_loaded: boolean;
+}
+
+export interface CreditModelMetadata {
+  id: string;
+  model_name: string;
+  version: string;
+  dataset_id: string;
+  status: string;
+  trained_at: string;
+  checksum: string;
+  metrics: Record<string, number | string | number[][]>;
+}
+
+export interface FeatureContribution {
+  feature_name: string;
+  feature_value: number;
+  shap_value: number;
+  impact_direction: string;
+}
+
+export interface BorrowerProfileSample {
+  sample_id: string;
+  label: string;
+  description: string;
+  expected_category: string;
+  features: Record<string, string | number>;
+}
+
+export interface CreditScoreResponse {
+  model_version: string;
+  predicted_category: string;
+  class_probabilities: Record<string, number>;
+  probability_of_default: number;
+  relative_risk_score?: number;
+  relative_risk_band: string;
+  percentile_framing: string;
+  warnings: string[];
+  methodology_disclosure: string;
+  proxy_dataset_disclaimer?: string;
+}
+
+export interface CreditExplainResponse {
+  model_version: string;
+  predicted_category: string;
+  class_probabilities: Record<string, number>;
+  probability_of_default: number;
+  base_value: number;
+  top_contributions: FeatureContribution[];
+  all_contributions: Record<string, number>;
+}
+
+export interface WhatIfResponse {
+  baseline_category?: string;
+  counterfactual_category?: string;
+  baseline_probabilities?: Record<string, number>;
+  counterfactual_probabilities?: Record<string, number>;
+  baseline_probability: number;
+  baseline_risk_band: string;
+  counterfactual_probability: number;
+  counterfactual_risk_band: string;
+  probability_delta: number;
+  direction_of_change: string;
+  modified_features: Record<string, { original: unknown; modified: unknown }>;
+  actionable_mode?: boolean;
+}
+
+export interface EMIResponse {
+  principal: number;
+  annual_interest_rate: number;
+  tenure_months: number;
+  monthly_emi: number;
+  total_interest: number;
+  total_payment: number;
+  amortization_schedule: Array<{
+    month: number;
+    payment: number;
+    principal_payment: number;
+    interest_payment: number;
+    remaining_balance: number;
+  }>;
+}
+
+export interface StressTestResponse {
+  baseline_income: number;
+  baseline_essential_expenses: number;
+  baseline_discretionary_expenses: number;
+  baseline_existing_emis: number;
+  proposed_emi: number;
+  liquid_savings: number;
+  baseline_surplus: number;
+  baseline_emi_to_income_ratio: number | null;
+  baseline_runway_months: number | null;
+  stressed_income: number;
+  stressed_essential_expenses: number;
+  stressed_discretionary_expenses: number;
+  stressed_existing_emis: number;
+  stressed_proposed_emi: number;
+  stressed_surplus: number;
+  stressed_emi_to_income_ratio: number | null;
+  stressed_runway_months: number | null;
+  surplus_change: number;
+  runway_change_months: number | null;
+  is_insolvent: boolean;
+  risk_assessment: string;
+}
+
+export interface PortfolioRiskMetrics {
+  portfolio_name: string;
+  currency: string;
+  symbols: string[];
+  weights: number[];
+  portfolio_value?: number | null;
+  position_values?: Record<string, number> | null;
+  data_source_mode?: string;
+  observations_count: number;
+  start_date: string;
+  end_date: string;
+  annualized_volatility: number;
+  historical_var_95: number;
+  historical_var_99: number;
+  parametric_var_95: number;
+  parametric_var_99: number;
+  expected_shortfall_95: number;
+  expected_shortfall_99: number;
+  historical_var_95_amount?: number | null;
+  historical_var_99_amount?: number | null;
+  parametric_var_95_amount?: number | null;
+  parametric_var_99_amount?: number | null;
+  expected_shortfall_95_amount?: number | null;
+  expected_shortfall_99_amount?: number | null;
+  maximum_drawdown: number;
+  mean_daily_return: number;
+  asset_correlations: Record<string, Record<string, number>>;
+  loss_convention?: string;
+  assumptions?: Record<string, unknown>;
+}
+
+export interface StressScenarioResult {
+  scenario_name: string;
+  portfolio_loss_pct: number;
+  individual_asset_losses: Record<string, number>;
+  assumptions: Record<string, unknown>;
+}
+
+export interface VaRValidationResponse {
+  portfolio_name: string;
+  currency: string;
+  method: string;
+  confidence_level: number;
+  lookback_window: number;
+  n_obs: number;
+  window: number;
+  confidence: number;
+  exceptions: number;
+  expected_exceptions: number;
+  forecast_count: number;
+  exception_count: number;
+  exception_rate: number;
+  expected_exception_rate: number;
+  basel_zone: string;
+  basel_zone_cumulative_prob: number;
+  kupiec_lr_stat: number | null;
+  kupiec_p_value: number | null;
+  kupiec_test_passed: boolean;
+  christoffersen_lr_stat?: number | null;
+  christoffersen_p_value?: number | null;
+  christoffersen_test_passed?: boolean | null;
+  summary_message: string;
+  validation_points: Array<{
+    date: string;
+    realized_loss: number;
+    forecast_var: number;
+    is_exception: boolean;
+  }>;
+}
+
+export interface StockSearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+  currency: string;
+  is_cached: boolean;
+  status: "verified" | "known" | "valid_remote";
+  alias_of?: string | null;
+  note?: string | null;
+}
+
+export interface StockSearchResponse {
+  query: string;
+  results: StockSearchResult[];
+}
+
+export interface SymbolValidateResponse {
+  symbol: string;
+  canonical_symbol: string;
+  name: string;
+  exchange: string;
+  currency: string;
+  state: "verified_snapshot" | "live_validated" | "not_available";
+  is_cached: boolean;
+  observations_count?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  alias_note?: string | null;
+  error_reason?: string | null;
+  message: string;
+}
+
+export interface VaRValidationHistoryItem {
+  id: string;
+  created_at: string;
+  portfolio_name: string;
+  currency: string;
+  symbols: string[];
+  method: string;
+  confidence_level: number;
+  lookback: number;
+  forecast_count: number;
+  exception_count: number;
+  exception_rate: number;
+  expected_exception_rate: number;
+  basel_zone?: string | null;
+  kupiec_p_value?: number | null;
+  kupiec_test_passed?: boolean | null;
+  christoffersen_p_value?: number | null;
+  christoffersen_test_passed?: boolean | null;
+}
+
+export interface CopilotResponse {
+  answer: string;
+  intent: string;
+  tool_trace: Array<{
+    tool_name: string;
+    arguments: Record<string, unknown>;
+    output: Record<string, unknown>;
+    is_authoritative: boolean;
+  }>;
+  citations: Array<{
+    title: string;
+    publisher: string;
+    snippet: string;
+    url: string;
+  }>;
+  offline_fallback_mode: boolean;
+  safety_disclaimer: string;
+}
+
+export interface ModelRegistryItem {
+  id: string;
+  model_name: string;
+  version: string;
+  dataset_id: string;
+  status: string;
+  trained_at: string;
+  checksum: string;
+  metrics: Record<string, number | string | number[][]>;
+}
+
+export interface DriftRunResponse {
+  id: string;
+  model_version_id: string;
+  reference_batch_id: string;
+  current_batch_id: string;
+  overall_psi: number;
+  overall_status: string;
+  features: Array<{
+    feature_name: string;
+    psi_value: number;
+    drift_status: string;
+    reference_count: number;
+    current_count: number;
+  }>;
+  run_timestamp: string;
+}
+
+export interface MethodologyResponse {
+  version: string;
+  credit_risk: Record<string, unknown>;
+  financial_stress: Record<string, unknown>;
+  market_risk: Record<string, unknown>;
+  var_validation: Record<string, unknown>;
+  disclaimers: string[];
+  known_limitations: string[];
+}
+
+// ─── API Methods ──────────────────────────────────────────────────────────────
+
+export const api = {
+  health: () => apiFetch<HealthResponse>("/health"),
+  
+  system: {
+    status: () => apiFetch<SystemStatus>("/api/v1/system/status"),
+  },
+
+  credit: {
+    models: () => apiFetch<CreditModelMetadata[]>("/api/v1/credit/models"),
+    samples: () => apiFetch<BorrowerProfileSample[]>("/api/v1/credit/samples"),
+    score: (features: Record<string, unknown>) =>
+      apiFetch<CreditScoreResponse>("/api/v1/credit/score", {
+        method: "POST",
+        body: JSON.stringify({ features }),
+      }),
+    explain: (features: Record<string, unknown>, top_n = 8) =>
+      apiFetch<CreditExplainResponse>("/api/v1/credit/explain", {
+        method: "POST",
+        body: JSON.stringify({ features, top_n }),
+      }),
+    whatIf: (baseline_features: Record<string, unknown>, modifications: Record<string, unknown>) =>
+      apiFetch<WhatIfResponse>("/api/v1/credit/what-if", {
+        method: "POST",
+        body: JSON.stringify({ baseline_features, modifications }),
+      }),
+  },
+
+  finance: {
+    emi: (params: { principal: number; annual_interest_rate: number; tenure_months: number; include_schedule?: boolean }) =>
+      apiFetch<EMIResponse>("/api/v1/finance/emi", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    stressTest: (params: Record<string, unknown>) =>
+      apiFetch<StressTestResponse>("/api/v1/finance/stress-test", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+  },
+
+  market: {
+    universe: () =>
+      apiFetch<{
+        supported_symbols: string[];
+        symbol_currencies?: Record<string, string>;
+        supported_currencies?: string[];
+        provider: string;
+        currency: string;
+        frequency: string;
+        manifest_present: boolean;
+      }>("/api/v1/market/universe"),
+    search: (query: string, limit = 15, currency?: string) => {
+      const url = `/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}${currency ? `&currency=${currency}` : ""}`;
+      return apiFetch<StockSearchResponse>(url);
+    },
+    validateSymbol: (symbol: string, target_currency?: string) =>
+      apiFetch<SymbolValidateResponse>("/api/v1/market/validate-symbol", {
+        method: "POST",
+        body: JSON.stringify({ symbol, target_currency }),
+      }),
+    analyze: (params: {
+      holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;
+      portfolio_name?: string;
+      currency?: string;
+      lookback_days?: number;
+      return_method?: string;
+      portfolio_value?: number;
+    }) =>
+      apiFetch<PortfolioRiskMetrics>("/api/v1/market/portfolio/analyze", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    stressTest: (
+      holdings: Array<{ symbol: string; weight?: number; position_value?: number }>,
+      custom_scenarios?: Array<{ name: string; description: string; shocks: Record<string, number> }>
+    ) =>
+      apiFetch<StressScenarioResult[]>("/api/v1/market/portfolio/stress-test", {
+        method: "POST",
+        body: JSON.stringify({ holdings, custom_scenarios }),
+      }),
+    validateVar: (params: {
+      holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;
+      portfolio_name?: string;
+      currency?: string;
+      method?: string;
+      confidence_level?: number;
+      lookback_window?: number;
+    }) =>
+      apiFetch<VaRValidationResponse>("/api/v1/market/var/validate", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    history: (limit = 20) =>
+      apiFetch<VaRValidationHistoryItem[]>(`/api/v1/market/var/history?limit=${limit}`),
+    refresh: (params?: { fetch_live?: boolean; symbols?: string[] }) =>
+      apiFetch<{
+        status: string;
+        data_source_mode: string;
+        live_error?: string | null;
+        provider: string;
+        currency: string;
+        supported_symbols: string[];
+        snapshot_details: Record<string, unknown>;
+        manifest_present: boolean;
+        refreshed_at: string;
+      }>("/api/v1/market/refresh", {
+        method: "POST",
+        body: JSON.stringify(params || {}),
+      }),
+  },
+
+  copilot: {
+    message: (message: string) =>
+      apiFetch<CopilotResponse>("/api/v1/copilot/message", {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      }),
+  },
+
+  monitoring: {
+    models: () => apiFetch<ModelRegistryItem[]>("/api/v1/monitoring/models"),
+    runDrift: (params?: { reference_batch_id?: string; current_batch_id?: string }) =>
+      apiFetch<DriftRunResponse>("/api/v1/monitoring/drift/run", {
+        method: "POST",
+        body: JSON.stringify(params || { reference_batch_id: "training_baseline", current_batch_id: "current_batch" }),
+      }),
+  },
+
+  methodology: {
+    get: () => apiFetch<MethodologyResponse>("/api/v1/methodology"),
+  },
+};

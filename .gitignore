@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
+backend/lib/
 parts/
 sdist/
 var/
@@ -48,6 +48,7 @@ artifacts/models/*
 !artifacts/models/.gitkeep
 artifacts/vector_index/*
 !artifacts/vector_index/.gitkeep
+artifacts/var_validation/*.json
 
 # Environment variables & secrets
 .env
@@ -61,6 +62,9 @@ artifacts/vector_index/*
 Thumbs.db
 .vscode/
 .idea/
+
+# Explicitly track frontend/lib (was erroneously caught by lib/ rule above)
+!frontend/lib/
 
 # Raw borrower-level data & local reports
 dataset/
