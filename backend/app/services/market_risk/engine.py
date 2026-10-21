@@ -7,6 +7,10 @@ import pandas as pd
 from pydantic import BaseModel
 from scipy import stats
 
+# Phase 2 risk engine (canonical implementation)
+from backend.app.services.market_risk.risk import var_models as _vm
+from backend.app.services.market_risk.risk import returns as _ret
+
 
 class Holding(BaseModel):
     symbol: str
@@ -237,32 +241,29 @@ class MarketRiskEngine:
         portfolio_losses = -portfolio_returns  # Loss convention: loss is positive
 
         # 1. Volatility (Annualized using 252 trading day convention)
+        # Delegate to risk.returns for consistency with Phase 2 API
+        port_returns_series = pd.Series(portfolio_returns.values)
         daily_std = float(portfolio_returns.std(ddof=1))
-        annualized_vol = daily_std * math.sqrt(252)
+        annualized_vol = _ret.annualized_volatility(port_returns_series)
 
-        # 2. Historical VaR and Expected Shortfall
-        hist_var_95 = float(np.percentile(portfolio_losses, 95))
-        hist_var_99 = float(np.percentile(portfolio_losses, 99))
+        # 2. Historical VaR / ES — delegate to risk.var_models (historical method)
+        losses_arr = -portfolio_returns.values  # positive = loss
+        hist_res_95 = _vm.estimate_var(losses_arr, method="historical", confidence=0.95, bootstrap=False)
+        hist_res_99 = _vm.estimate_var(losses_arr, method="historical", confidence=0.99, bootstrap=False)
+        hist_var_95 = hist_res_95.var
+        hist_var_99 = hist_res_99.var
+        es_95 = hist_res_95.es
+        es_99 = hist_res_99.es
 
-        # Expected Shortfall (CVaR): Mean of losses exceeding VaR threshold
-        tail_95 = portfolio_losses[portfolio_losses >= hist_var_95]
-        es_95 = float(tail_95.mean()) if len(tail_95) > 0 else hist_var_95
-
-        tail_99 = portfolio_losses[portfolio_losses >= hist_var_99]
-        es_99 = float(tail_99.mean()) if len(tail_99) > 0 else hist_var_99
-
-        # 3. Parametric VaR (Gaussian assumption using sample mean & std)
+        # 3. Parametric VaR (Gaussian) — delegate to risk.var_models
         mean_ret = float(portfolio_returns.mean())
-        z_95 = stats.norm.ppf(0.95)
-        z_99 = stats.norm.ppf(0.99)
-        param_var_95 = z_95 * daily_std - mean_ret
-        param_var_99 = z_99 * daily_std - mean_ret
+        gauss_res_95 = _vm.estimate_var(losses_arr, method="gaussian", confidence=0.95, bootstrap=False)
+        gauss_res_99 = _vm.estimate_var(losses_arr, method="gaussian", confidence=0.99, bootstrap=False)
+        param_var_95 = gauss_res_95.var
+        param_var_99 = gauss_res_99.var
 
-        # 4. Maximum Drawdown on simulated wealth path
-        wealth_index = (1.0 + portfolio_returns).cumprod()
-        previous_peaks = wealth_index.cummax()
-        drawdowns = (wealth_index - previous_peaks) / previous_peaks
-        max_drawdown = float(abs(drawdowns.min()))
+        # 4. Maximum Drawdown
+        max_drawdown = abs(_ret.max_drawdown(pd.Series(portfolio_returns.values)))
 
         # 5. Correlation matrix
         corr_matrix = returns_df[symbols].corr().fillna(0.0).to_dict()
@@ -270,20 +271,20 @@ class MarketRiskEngine:
         start_dt = str(prices.index[0].date())
         end_dt = str(prices.index[-1].date())
 
-        hist_var_95_rounded = round(hist_var_95, 4)
-        hist_var_99_rounded = round(hist_var_99, 4)
-        param_var_95_rounded = round(param_var_95, 4)
-        param_var_99_rounded = round(param_var_99, 4)
-        es_95_rounded = round(es_95, 4)
-        es_99_rounded = round(es_99, 4)
+        hist_var_95_r = round(hist_var_95, 4)
+        hist_var_99_r = round(hist_var_99, 4)
+        param_var_95_r = round(param_var_95, 4)
+        param_var_99_r = round(param_var_99, 4)
+        es_95_r = round(es_95, 4)
+        es_99_r = round(es_99, 4)
 
         # Monetary loss amounts where portfolio value is known
-        hist_var_95_amt = round(hist_var_95_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
-        hist_var_99_amt = round(hist_var_99_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
-        param_var_95_amt = round(param_var_95_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
-        param_var_99_amt = round(param_var_99_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
-        es_95_amt = round(es_95_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
-        es_99_amt = round(es_99_rounded * effective_portfolio_value, 2) if effective_portfolio_value else None
+        hist_var_95_amt = round(hist_var_95_r * effective_portfolio_value, 2) if effective_portfolio_value else None
+        hist_var_99_amt = round(hist_var_99_r * effective_portfolio_value, 2) if effective_portfolio_value else None
+        param_var_95_amt = round(param_var_95_r * effective_portfolio_value, 2) if effective_portfolio_value else None
+        param_var_99_amt = round(param_var_99_r * effective_portfolio_value, 2) if effective_portfolio_value else None
+        es_95_amt = round(es_95_r * effective_portfolio_value, 2) if effective_portfolio_value else None
+        es_99_amt = round(es_99_r * effective_portfolio_value, 2) if effective_portfolio_value else None
 
         assumptions = {
             "annualization_factor": 252,
@@ -292,7 +293,8 @@ class MarketRiskEngine:
             "weight_tolerance": 1e-4,
             "loss_convention": "Loss is positive magnitude (Loss = -Return). VaR is the loss threshold not exceeded at (1-alpha) confidence.",
             "data_source_mode": data_source_mode,
-            "portfolio_value": effective_portfolio_value
+            "portfolio_value": effective_portfolio_value,
+            "risk_engine": "market_risk.risk (Phase 2)"
         }
 
         return PortfolioRiskMetrics(
@@ -308,12 +310,12 @@ class MarketRiskEngine:
             data_source_mode=data_source_mode,
             annualized_volatility=round(annualized_vol, 4),
             annualization_factor=252,
-            historical_var_95=round(hist_var_95, 4),
-            historical_var_99=round(hist_var_99, 4),
-            parametric_var_95=round(param_var_95, 4),
-            parametric_var_99=round(param_var_99, 4),
-            expected_shortfall_95=round(es_95, 4),
-            expected_shortfall_99=round(es_99, 4),
+            historical_var_95=hist_var_95_r,
+            historical_var_99=hist_var_99_r,
+            parametric_var_95=param_var_95_r,
+            parametric_var_99=param_var_99_r,
+            expected_shortfall_95=es_95_r,
+            expected_shortfall_99=es_99_r,
             historical_var_95_amount=hist_var_95_amt,
             historical_var_99_amount=hist_var_99_amt,
             parametric_var_95_amount=param_var_95_amt,
@@ -329,6 +331,7 @@ class MarketRiskEngine:
             loss_convention="Loss is positive magnitude (Loss = -Return)",
             assumptions=assumptions
         )
+
 
     def run_stress_test(
         self,
