@@ -40,5 +40,8 @@ This document details explicit technical and methodology limitations of RiskWise
 ---
 
 ## 6. Container & Deployment Verification
-- **Container Build Status:** Backend container build not verified (Docker unavailable on the dev machine). Local evaluation and test suites run directly via virtual environment.
+- **Container Build Status:** Attempted execution of `docker compose build` on 2026-10-22; Docker CLI is not installed on this host (`CommandNotFoundException: The term 'docker' is not recognized`). Container build is therefore confirmed unavailable in the current host environment.
+- **Local Validation Status:** Verified end-to-end locally on host:
+  - Backend: 129 passing pytest tests under Python 3.11 (`backend/tests/`).
+  - Frontend: `npm run lint` passed (0 errors), `npm run build` compiled production bundle successfully with Next.js Turbopack.
 
