@@ -84,7 +84,7 @@ RAG corpus, and offline mode. Never fabricates healthy or active state.
 
 ### `POST /api/v1/credit/score`
 **Summary:** Score Borrower  
-**Description:** Score borrower feature attributes, return relative risk band and persistence run.  
+**Description:** Score borrower feature attributes, return predicted tier and class probabilities.  
 **Tags:** Credit Risk Intelligence  
 
 **Request Body (application/json):**
@@ -112,7 +112,7 @@ RAG corpus, and offline mode. Never fabricates healthy or active state.
 
 ### `POST /api/v1/credit/explain`
 **Summary:** Explain Credit Score  
-**Description:** Compute local SHAP waterfall feature contributions for input profile.  
+**Description:** Compute local SHAP feature contributions for borrower profile.  
 **Tags:** Credit Risk Intelligence  
 
 **Request Body (application/json):**
@@ -140,7 +140,7 @@ RAG corpus, and offline mode. Never fabricates healthy or active state.
 
 ### `POST /api/v1/credit/what-if`
 **Summary:** What If Counterfactual  
-**Description:** Re-score baseline profile with modified features and compare predictions.  
+**Description:** Re-score baseline profile with modified features and compare category & probability shifts.  
 **Tags:** Credit Risk Intelligence  
 
 **Request Body (application/json):**
@@ -224,11 +224,17 @@ RAG corpus, and offline mode. Never fabricates healthy or active state.
 
 ### `GET /api/v1/market/universe`
 **Summary:** Get Market Universe  
-**Description:** Return available market symbols, data coverage, currency, and provenance.  
+**Description:** Return available market symbols, data coverage, currency, provenance, and instrument metadata.  
 **Tags:** Portfolio Market Risk Lab & VaR Validation  
 
 **Responses:**
 - **`200`**: Successful Response
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
 
 ---
 

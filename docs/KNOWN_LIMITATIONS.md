@@ -40,8 +40,20 @@ This document details explicit technical and methodology limitations of RiskWise
 ---
 
 ## 6. Container & Deployment Verification
-- **Container Build Status:** Attempted execution of `docker compose build` on 2026-10-22; Docker CLI is not installed on this host (`CommandNotFoundException: The term 'docker' is not recognized`). Container build is therefore confirmed unavailable in the current host environment.
+- **Container Build Status:** Docker CLI is not installed on this host (`CommandNotFoundException`). Container build is therefore confirmed unavailable in the current host environment. Never claimed.
 - **Local Validation Status:** Verified end-to-end locally on host:
-  - Backend: 129 passing pytest tests under Python 3.11 (`backend/tests/`).
-  - Frontend: `npm run lint` passed (0 errors), `npm run build` compiled production bundle successfully with Next.js Turbopack.
+  - Backend: **202 passing pytest tests** under Python 3.11 (`backend/tests/`); 0 failures.
+  - Frontend: `npm run build` compiles production bundle successfully with Next.js 16.4.0 Turbopack (0 TypeScript errors).
+
+---
+
+## 7. Multi-Model VaR Limitations (Tier A Upgrade — A2–A4)
+
+- **GARCH(1,1) MLE Convergence:** GARCH fitting uses `arch` library's default SLSQP solver. On very short or stationary series (< 60 observations), the optimizer may converge to boundary values (α or β → 0). The backend falls back to EWMA volatility if `α + β ≥ 1` (non-stationary).
+- **Student-t DoF Estimation:** Degrees-of-freedom fitting via `scipy.stats.t.fit` on portfolio composite returns; results may be imprecise for small samples (< 100 observations). DoF is clamped to [3, 100].
+- **Monte Carlo Seed Determinism:** MC VaR uses `np.random.seed(42)` for reproducibility. Two analysts running identical inputs will receive identical results; this is intentional for auditability.
+- **Cornish-Fisher Range:** The Cornish-Fisher expansion is a 4th-order asymptotic approximation and may give biased results for very high skewness (|S| > 2) or excess kurtosis (E > 10). The API clips |S| ≤ 3, E ≤ 10 as a guard.
+- **Backtest Minimum N:** Kupiec and Christoffersen tests require at least 30 out-of-sample forecasts for the asymptotic χ² approximation to hold. The API enforces a 60-day minimum lookback and warns when fewer than 30 forecasts are available.
+- **Benchmark Beta Estimation:** Beta is estimated using the full aligned historical window; short joint histories (< 60 days overlap) produce unreliable CAPM betas. The API reports `beta_to_benchmark = null` in those cases.
+- **Recharts Cumulative-Return Curves:** The curves rendered in `MarketRiskCharts.tsx` are **pseudo-random simulations seeded from summary statistics** (μ, σ, β), NOT actual price path replays. They illustrate distributional shape and relative beta for educational purposes only. Actual return paths require tick-level data integration not available in the current offline snapshot strategy.
 

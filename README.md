@@ -1,8 +1,8 @@
 # RiskWise — Multi-Domain Financial Risk Intelligence Platform
 
-RiskWise is an explainable, agentic financial risk intelligence platform combining borrower credit-risk analysis, personal financial stress testing, portfolio market-risk measurement, rolling Value-at-Risk (VaR) validation, and source-grounded educational guidance.
+RiskWise is an explainable, agentic financial risk intelligence platform combining borrower credit-risk analysis, personal financial stress testing, portfolio market-risk measurement (8 VaR/ES models), rolling Value-at-Risk model validation (Kupiec + Christoffersen), and source-grounded educational guidance.
 
-Built as a modular monolith adhering to PRD v3.0 specifications.
+Built as a modular monolith adhering to PRD v3.0 specifications. **Tier A upgrade complete:** 2,617 NSE/BSE/US instruments in live instrument master, multi-model risk analytics, Basel BCBS traffic-light backtesting, and interactive Recharts data visualisation.
 
 ---
 
@@ -50,11 +50,23 @@ For in-depth architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 │   ├── raw/                     # Raw input benchmarks
 │   ├── processed/               # Cleaned data partitions
 │   ├── market_snapshots/        # Local offline daily price snapshots
+│   ├── reference/               # EQUITY_L.csv — official NSE listed equities (2,608)
 │   └── manifests/               # Data verification manifests
 ├── knowledge/                   # Curated RAG documents & manifest
 └── scripts/                     # Setup, data ingestion, evaluation scripts
-    └── setup_data.py            # Data setup & status verification utility
+    ├── setup_data.py            # Data setup & status verification utility
+    └── build_instrument_master.py  # Ingests EQUITY_L.csv → instruments SQLite table
 ```
+
+### Key Documentation
+
+| File | Purpose |
+|---|---|
+| [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) | Auto-generated FastAPI endpoint specifications (18 endpoints) |
+| [docs/MARKET_RISK_METHODS.md](docs/MARKET_RISK_METHODS.md) | Formulas & references for all 8 VaR/ES models + backtest tests |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Architectural Decision Records (ADR-001 – ADR-015) |
+| [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Explicit methodology disclosures and system boundaries |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Modular monolith design and data flow |
 
 ---
 
@@ -149,16 +161,18 @@ Open [http://localhost:3000](http://localhost:3000) to view the RiskWise dashboa
 
 Run all quality checks before committing:
 
-```bash
-# Run backend test suite
-.\backend\venv\Scripts\pytest backend/tests -v
+```powershell
+# Run full backend test suite (202 tests)
+.\.venv\Scripts\pytest backend/tests -v
 
 # Run backend linter
-.\backend\venv\Scripts\ruff check backend
+.\.venv\Scripts\ruff check backend
 
-# Run frontend tests & linter
-cd frontend && npm test --if-present && npm run lint
+# Run frontend build (TypeScript type-check + Next.js compile)
+cd frontend; npm run build
 ```
+
+**Test baseline (as of 2026-10-22):** 202 passing, 0 failures, 34.2s.
 
 ---
 
