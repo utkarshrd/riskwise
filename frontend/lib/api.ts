@@ -164,6 +164,28 @@ export interface PortfolioRiskMetrics {
   asset_correlations: Record<string, Record<string, number>>;
   loss_convention?: string;
   assumptions?: Record<string, unknown>;
+  selected_var_method?: string;
+  horizon_days?: number;
+  selected_var_95?: number | null;
+  selected_var_99?: number | null;
+  selected_es_95?: number | null;
+  selected_es_99?: number | null;
+  sharpe_ratio?: number | null;
+  sortino_ratio?: number | null;
+  drawdown_table?: Array<{
+    peak_date: string;
+    trough_date: string;
+    recovery_date?: string | null;
+    depth: number;
+    duration_days: number;
+    recovery_days?: number | null;
+  }>;
+  component_var_pct?: Record<string, number> | null;
+  marginal_var?: Record<string, number> | null;
+  benchmark_symbol?: string | null;
+  benchmark_volatility?: number | null;
+  beta_to_benchmark?: number | null;
+  correlation_to_benchmark?: number | null;
 }
 
 export interface StressScenarioResult {
@@ -190,12 +212,16 @@ export interface VaRValidationResponse {
   expected_exception_rate: number;
   basel_zone: string;
   basel_zone_cumulative_prob: number;
+  basel_capital_multiplier?: number | null;
   kupiec_lr_stat: number | null;
   kupiec_p_value: number | null;
   kupiec_test_passed: boolean;
   christoffersen_lr_stat?: number | null;
   christoffersen_p_value?: number | null;
   christoffersen_test_passed?: boolean | null;
+  christoffersen_cc_stat?: number | null;
+  christoffersen_cc_p_value?: number | null;
+  christoffersen_cc_test_passed?: boolean | null;
   summary_message: string;
   validation_points: Array<{
     date: string;
@@ -203,6 +229,34 @@ export interface VaRValidationResponse {
     forecast_var: number;
     is_exception: boolean;
   }>;
+}
+
+export interface VaRModelComparisonItem {
+  method: string;
+  exceptions: number;
+  expected_exceptions: number;
+  exception_rate: number;
+  expected_exception_rate: number;
+  basel_zone: string;
+  basel_capital_multiplier: number;
+  kupiec_p_value: number | null;
+  kupiec_test_passed: boolean;
+  christoffersen_ind_p_value: number | null;
+  christoffersen_ind_passed: boolean | null;
+  christoffersen_cc_p_value: number | null;
+  christoffersen_cc_test_passed: boolean | null;
+  score: number;
+}
+
+export interface VaRCompareResponse {
+  portfolio_name: string;
+  currency: string;
+  confidence_level: number;
+  lookback_window: number;
+  forecast_count: number;
+  models: VaRModelComparisonItem[];
+  recommended_method: string;
+  recommendation_reason: string;
 }
 
 export interface StockSearchResult {
@@ -367,8 +421,18 @@ export const api = {
         frequency: string;
         manifest_present: boolean;
       }>("/api/v1/market/universe"),
-    search: (query: string, limit = 15, currency?: string) => {
-      const url = `/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}${currency ? `&currency=${currency}` : ""}`;
+    search: (
+      query: string,
+      limit = 15,
+      currency?: string,
+      options?: { sector?: string; index?: string; cap_bucket?: string; page?: number }
+    ) => {
+      let url = `/api/v1/market/search?q=${encodeURIComponent(query)}&limit=${limit}`;
+      if (currency) url += `&currency=${encodeURIComponent(currency)}`;
+      if (options?.sector) url += `&sector=${encodeURIComponent(options.sector)}`;
+      if (options?.index) url += `&index=${encodeURIComponent(options.index)}`;
+      if (options?.cap_bucket) url += `&cap_bucket=${encodeURIComponent(options.cap_bucket)}`;
+      if (options?.page) url += `&page=${options.page}`;
       return apiFetch<StockSearchResponse>(url);
     },
     validateSymbol: (symbol: string, target_currency?: string) =>
@@ -383,6 +447,9 @@ export const api = {
       lookback_days?: number;
       return_method?: string;
       portfolio_value?: number;
+      var_method?: string;
+      horizon_days?: number;
+      benchmark_symbol?: string;
     }) =>
       apiFetch<PortfolioRiskMetrics>("/api/v1/market/portfolio/analyze", {
         method: "POST",
@@ -405,6 +472,18 @@ export const api = {
       lookback_window?: number;
     }) =>
       apiFetch<VaRValidationResponse>("/api/v1/market/var/validate", {
+        method: "POST",
+        body: JSON.stringify(params),
+      }),
+    compareVar: (params: {
+      holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;
+      portfolio_name?: string;
+      currency?: string;
+      confidence_level?: number;
+      lookback_window?: number;
+      methods?: string[];
+    }) =>
+      apiFetch<VaRCompareResponse>("/api/v1/market/var/compare", {
         method: "POST",
         body: JSON.stringify(params),
       }),

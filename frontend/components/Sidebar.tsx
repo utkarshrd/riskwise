@@ -14,14 +14,14 @@ import {
 
 export const navigationLinks = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/credit", label: "Credit Risk & SHAP", icon: CreditCard, milestone: "M1-M2" },
-  { href: "/stress", label: "Financial Stress", icon: Activity, milestone: "M3" },
-  { href: "/loans", label: "Loan Affordability", icon: Calculator, milestone: "M3" },
-  { href: "/market-risk", label: "Market Risk Lab", icon: TrendingUp, milestone: "M4" },
-  { href: "/var-validation", label: "VaR Validation", icon: CheckCircle2, milestone: "M5" },
-  { href: "/copilot", label: "Risk Copilot", icon: Bot, milestone: "M6" },
-  { href: "/model-health", label: "Model Registry & Drift", icon: Server, milestone: "M7" },
-  { href: "/methodology", label: "Methodology & Disclosures", icon: BookOpen, milestone: "M0" },
+  { href: "/credit", label: "Credit Risk & SHAP", icon: CreditCard },
+  { href: "/stress", label: "Financial Stress", icon: Activity },
+  { href: "/loans", label: "Loan Affordability", icon: Calculator },
+  { href: "/market-risk", label: "Market Risk Lab", icon: TrendingUp },
+  { href: "/var-validation", label: "VaR Validation", icon: CheckCircle2 },
+  { href: "/copilot", label: "Risk Copilot", icon: Bot },
+  { href: "/model-health", label: "Model Registry & Drift", icon: Server },
+  { href: "/methodology", label: "Methodology & Disclosures", icon: BookOpen },
 ];
 
 export default function Sidebar() {
@@ -53,11 +53,6 @@ export default function Sidebar() {
                 <Icon className="w-4 h-4 text-slate-400" />
                 <span>{item.label}</span>
               </div>
-              {item.milestone && (
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                  {item.milestone}
-                </span>
-              )}
             </Link>
           );
         })}
@@ -65,11 +60,11 @@ export default function Sidebar() {
 
       <div className="p-4 border-t border-slate-800 text-xs text-slate-400 bg-slate-950/40">
         <div className="flex items-center gap-2 mb-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-medium text-slate-300">Offline-Ready Mode</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span className="font-medium text-slate-300">Quantitative Risk Engine</span>
         </div>
         <p className="text-[11px] leading-relaxed text-slate-400">
-          Zero external API dependencies required. PRD v3.0 Milestone 0 baseline.
+          Institutional analytics with deterministic calculations and real NSE market coverage.
         </p>
       </div>
     </aside>

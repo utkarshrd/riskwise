@@ -21,6 +21,8 @@ import {
   StressScenarioResult,
   StockSearchResult,
 } from "@/lib/api";
+import NSEStockSearch from "@/components/NSEStockSearch";
+import MarketRiskCharts from "@/components/MarketRiskCharts";
 
 interface HoldingRow {
   symbol: string;
@@ -116,6 +118,8 @@ export default function MarketRiskPage() {
   const [inputMode, setInputMode] = useState<"weight" | "value">("weight");
   const [lookbackDays, setLookbackDays] = useState<number>(252);
   const [returnMethod, setReturnMethod] = useState<string>("simple");
+  const [varMethod, setVarMethod] = useState<string>("historical");
+  const [horizonDays, setHorizonDays] = useState<number>(1);
   const [holdings, setHoldings] = useState<HoldingRow[]>([
     { symbol: "SPY", name: "SPDR S&P 500 ETF", exchange: "NYSE Arca", currency: "USD", weight: 0.4, position_value: 40000 },
     { symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ", currency: "USD", weight: 0.3, position_value: 30000 },
@@ -348,6 +352,8 @@ export default function MarketRiskPage() {
         lookback_days: lookbackDays,
         return_method: returnMethod,
         portfolio_value: portfolioValue,
+        var_method: varMethod,
+        horizon_days: horizonDays,
       });
       setMetrics(res);
 
@@ -565,112 +571,13 @@ export default function MarketRiskPage() {
               />
             </div>
 
-            {/* Stock Search & Add Asset */}
-            <div className="space-y-2 relative" ref={searchContainerRef}>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Search className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Search & Add Stocks (NSE / BSE / US)</span>
-                </label>
-                <span className="text-[10px] text-slate-400 font-mono">e.g. RELIANCE, TCS, SBIN, AAPL</span>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Type ticker or company name (e.g. INFY, Tata Motors, MSFT)..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowSearchDropdown(true);
-                  }}
-                  onFocus={() => setShowSearchDropdown(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && searchQuery.trim()) {
-                      e.preventDefault();
-                      addAssetToPortfolio({ symbol: searchQuery.trim() });
-                    }
-                  }}
-                  className="w-full text-xs pl-8 pr-20 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                {searchQuery.trim() && (
-                  <button
-                    type="button"
-                    onClick={() => addAssetToPortfolio({ symbol: searchQuery.trim() })}
-                    className="absolute right-1.5 top-1 px-2.5 py-1 text-[11px] font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
-                  >
-                    + Add
-                  </button>
-                )}
-              </div>
-
-              {/* Search Dropdown */}
-              {showSearchDropdown && searchQuery.trim().length > 0 && (
-                <div className="absolute z-30 left-0 right-0 mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-1.5 space-y-1">
-                  {searchLoading && (
-                    <div className="p-3 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-                      Searching market data provider...
-                    </div>
-                  )}
-
-                  {!searchLoading && searchResults.length === 0 && (
-                    <div className="p-3 text-center text-xs text-slate-500 space-y-1">
-                      <div>No predefined match for &quot;{searchQuery}&quot;.</div>
-                      <button
-                        type="button"
-                        onClick={() => addAssetToPortfolio({ symbol: searchQuery.trim() })}
-                        className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
-                      >
-                        + Add &quot;{searchQuery.toUpperCase().trim()}&quot; as direct ticker
-                      </button>
-                    </div>
-                  )}
-
-                  {searchResults.map((item) => (
-                    <button
-                      key={item.symbol}
-                      type="button"
-                      onClick={() => addAssetToPortfolio(item)}
-                      className="w-full text-left p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/80 flex items-center justify-between transition-colors text-xs"
-                    >
-                      <div className="flex flex-col min-w-0 pr-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                            {item.symbol}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            ({item.exchange})
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                          {item.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                            item.currency === "INR"
-                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                              : "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                          }`}
-                        >
-                          {item.currency}
-                        </span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.5 rounded ${
-                            item.is_cached
-                              ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                              : "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400"
-                          }`}
-                        >
-                          {item.is_cached ? "Verified" : "Provider"}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Stock Search with Sector & Index Chips */}
+            <div className="space-y-1.5">
+              <NSEStockSearch
+                onSelectSymbol={(sym, name, curr) => addAssetToPortfolio({ symbol: sym, name, currency: curr })}
+                activeCurrency={currency}
+                disabledSymbols={holdings.map((h) => h.symbol)}
+              />
             </div>
 
             {/* Asset Holdings Table */}
@@ -881,6 +788,44 @@ export default function MarketRiskPage() {
                   <option value="log">Log Returns (ln(P_t/P_0))</option>
                 </select>
               </div>
+
+              {/* VaR Model Selector */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  VaR Model
+                </label>
+                <select
+                  value={varMethod}
+                  onChange={(e) => setVarMethod(e.target.value)}
+                  className="w-full text-xs px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                >
+                  <option value="historical">Historical Quantile (Empirical)</option>
+                  <option value="gaussian">Gaussian Parametric (Normal)</option>
+                  <option value="student_t">Student-t (Fat Tails)</option>
+                  <option value="cornish_fisher">Cornish-Fisher (Skew/Kurtosis)</option>
+                  <option value="ewma">EWMA (RiskMetrics λ=0.94)</option>
+                  <option value="monte_carlo">Monte Carlo (Cholesky Seeded)</option>
+                  <option value="garch">GARCH(1,1) Volatility</option>
+                  <option value="fhs">Filtered Historical Simulation</option>
+                </select>
+              </div>
+
+              {/* Horizon Days Selector */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  Holding Horizon
+                </label>
+                <select
+                  value={horizonDays}
+                  onChange={(e) => setHorizonDays(Number(e.target.value))}
+                  className="w-full text-xs px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
+                >
+                  <option value={1}>1 Trading Day (Daily)</option>
+                  <option value={5}>5 Trading Days (1 Week)</option>
+                  <option value={10}>10 Trading Days (Basel)</option>
+                  <option value={20}>20 Trading Days (1 Month)</option>
+                </select>
+              </div>
             </div>
 
             {/* Submit Action */}
@@ -1030,6 +975,49 @@ export default function MarketRiskPage() {
                   </div>
                   <div className="text-[10px] text-slate-400">Base Currency: {metrics.currency}</div>
                 </div>
+
+                {/* Performance & Factor Ratios */}
+                <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    Sharpe Ratio (Rf=0%)
+                  </div>
+                  <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                    {metrics.sharpe_ratio != null ? metrics.sharpe_ratio.toFixed(2) : "N/A"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">Risk-Adjusted Return</div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    Sortino Ratio
+                  </div>
+                  <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                    {metrics.sortino_ratio != null ? metrics.sortino_ratio.toFixed(2) : "N/A"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">Downside Semi-Deviation</div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    Beta vs {metrics.benchmark_symbol || "Benchmark"}
+                  </div>
+                  <div className="text-lg font-bold text-slate-900 dark:text-slate-100 font-mono">
+                    {metrics.beta_to_benchmark != null ? metrics.beta_to_benchmark.toFixed(2) : "1.00"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Corr: {metrics.correlation_to_benchmark != null ? metrics.correlation_to_benchmark.toFixed(2) : "1.00"}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                  <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    Active VaR Method
+                  </div>
+                  <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono uppercase truncate pt-1">
+                    {(metrics.selected_var_method || varMethod).replace(/_/g, " ")}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono">Horizon: {metrics.horizon_days || horizonDays}D</div>
+                </div>
               </div>
 
               {/* Value-at-Risk & Expected Shortfall Comparison Table */}
@@ -1163,6 +1151,9 @@ export default function MarketRiskPage() {
                   </table>
                 </div>
               </div>
+
+              {/* Dynamic Interactive Recharts Visualizations (A5) */}
+              <MarketRiskCharts metrics={metrics} currency={metrics.currency} />
 
               {/* Correlation Matrix Heatmap */}
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">

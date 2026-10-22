@@ -22,6 +22,8 @@ import {
   VaRValidationHistoryItem,
   StockSearchResult,
 } from "@/lib/api";
+import VaRBacktestChart from "@/components/VaRBacktestChart";
+import VaRModelComparison from "@/components/VaRModelComparison";
 
 interface HoldingRow {
   symbol: string;
@@ -894,6 +896,19 @@ export default function VaRValidationPage() {
                 </div>
               </div>
 
+              {/* A5: Recharts Rolling Backtest Chart */}
+              <VaRBacktestChart validationResult={validationResult} />
+
+              {/* A5: Side-by-side Model Comparison (A4 endpoint) */}
+              <VaRModelComparison
+                holdings={holdings.map((h) => ({ symbol: h.symbol, weight: h.weight }))}
+                currency={currency}
+                confidenceLevel={confidenceLevel}
+                lookbackWindow={lookbackWindow}
+                onSelectMethod={(m) => setMethod(m)}
+                activeMethod={method}
+              />
+
               {/* Hypothesis Testing Cards: Kupiec & Christoffersen */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Kupiec POF Card */}
@@ -986,7 +1001,34 @@ export default function VaRValidationPage() {
                           : "1.0000"}
                       </div>
                     </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400">CC LR (df=2)</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">
+                        {validationResult.christoffersen_cc_stat != null
+                          ? validationResult.christoffersen_cc_stat.toFixed(4)
+                          : "N/A"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-400">CC p-value</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200">
+                        {validationResult.christoffersen_cc_p_value != null
+                          ? validationResult.christoffersen_cc_p_value.toFixed(4)
+                          : "N/A"}
+                      </div>
+                    </div>
                   </div>
+
+                  {validationResult.basel_capital_multiplier != null && (
+                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs font-mono">
+                      <span className="text-amber-800 dark:text-amber-300 font-semibold">
+                        Basel Capital Multiplier
+                      </span>
+                      <span className="font-bold text-amber-700 dark:text-amber-200 text-base">
+                        {validationResult.basel_capital_multiplier.toFixed(2)}×
+                      </span>
+                    </div>
+                  )}
 
                   <div className="text-[11px] text-slate-400 flex items-start gap-1.5 pt-1">
                     <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
