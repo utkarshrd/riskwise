@@ -3,15 +3,45 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch {
+    throw new ApiError(0, `Cannot reach the RiskWise API at ${BASE_URL}. Check that the backend is running.`);
+  }
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+    throw new ApiError(res.status, await readErrorMessage(res));
   }
   return res.json() as Promise<T>;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** Pull the human-readable part out of FastAPI error bodies ({"detail": "..."} or {"detail": {"message": "..."}}). */
+async function readErrorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const detail = JSON.parse(text)?.detail;
+    if (typeof detail === "string") return detail;
+    if (detail?.message) return String(detail.message);
+    if (Array.isArray(detail)) {
+      return detail.map((d: { loc?: unknown[]; msg?: string }) => `${d.loc?.slice(1).join(".") ?? ""} ${d.msg ?? ""}`.trim()).join("; ");
+    }
+  } catch {
+    // not JSON; fall through to the raw body
+  }
+  return text ? `Request failed (${res.status}): ${text.slice(0, 300)}` : `Request failed (${res.status}).`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

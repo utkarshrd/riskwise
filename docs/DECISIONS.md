@@ -181,3 +181,23 @@ This document tracks all foundational architecture, domain modeling, and technic
   4. Prompt files moved with `git mv` (history kept), none deleted.
 - **Found, deferred to B1:** at 390px the 256px fixed sidebar leaves about 130px for content and the page scrolls horizontally (614px wide); Recharts logs duplicate-key errors at that width. The SHAP panel shows raw feature names and the credit page uses a dark panel inside a light layout.
 - **Not verified:** 390px and 1440px screenshots were taken with headless Chrome driven over the DevTools protocol (`docs/screenshots/b0/`). Docker was not used.
+
+## B1: Frontend structure and look (2026-10-22)
+- **Decision:** Split the three large pages into feature folders (`_components`, `_hooks`, `_lib`), share one portfolio builder between Market Risk and VaR Validation, add `components/ui` primitives, a real light/dark toggle, loading skeletons and error states, and a metric glossary whose tooltips link into `docs/MARKET_RISK_METHODS.md`.
+- **Reasoning:**
+  1. `market-risk` 1,291 lines, `var-validation` 1,143, `credit` 1,124 became 82, 79 and 53 lines. The Market Risk and VaR Validation pages had the same holdings, preset and currency logic copied twice; it now lives in `hooks/usePortfolioBuilder.ts` and `components/portfolio/`. The credit form's 42 inputs are defined once in `credit/_lib/fields.ts`.
+  2. Theme: `data-theme` on `<html>` set by an inline pre-paint script (saved choice, else OS setting) with a Tailwind `dark` custom variant. The credit page used a hard-coded dark panel inside a light layout; it now follows the theme.
+  3. Tooltips: `lib/metric-docs.ts` maps each metric to a heading in the methods doc. `/methodology/market-risk` renders that file with an anchor per heading. `test_metric_docs_headings.py` fails if a heading is renamed. Section 16 was added to the doc for volatility, mean return, loss convention, correlation and the chart series, which had no section.
+  4. `apiFetch` now raises `ApiError` with the readable server message and a clear "backend not reachable" message instead of `API 400: {json}`.
+- **Bugs found and fixed while doing this:**
+  - Sharpe and Sortino were labelled and documented as "Rf = 0%", but the engine subtracts a fixed risk-free proxy (6% INR, 5% USD). The UI now shows the rate used and the doc is corrected.
+  - Beta showed "1.00" when no benchmark data existed; it now shows N/A.
+  - The Christoffersen card displayed made-up fallbacks ("0.0000", "1.0000") and treated a missing test as passed; it now shows N/A and "not available".
+  - Live-downloaded data was labelled "Verified snapshot".
+  - A symbol whose validation request failed stayed on "Validating…" forever; it is now marked unavailable with the reason.
+  - The advanced credit section said "25 additional features"; it has 24 (18 + 24 = the 42 the model uses).
+  - The weight inputs showed a fraction (0.4) next to a "%" sign; they now show percent.
+  - `NSEStockSearch` had the lint error (setState inside an effect) and swallowed search failures; both fixed.
+- **Narrow-window layout:** a collapsing sidebar and compact header were added so the page no longer overflows, but narrow-window layouts were not verified beyond that (out of scope: this is a desktop website).
+- **Dev note:** after editing `globals.css`, Turbopack kept serving a stale stylesheet until `.next` was cleared. Production build is unaffected.
+- **Verified:** 206 backend tests, `tsc`, `eslint` (0 problems), `next build` exit 0; desktop (1440px) screenshots of Market Risk, VaR Validation, Credit and the methods page in light and dark with 0 console errors, in `docs/screenshots/b1/`. Tooltip open and link target checked in the DOM.

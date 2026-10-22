@@ -10,7 +10,6 @@ import {
   Tooltip,
   Legend,
   CartesianGrid,
-  ReferenceDot,
 } from "recharts";
 import { AlertCircle, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
 import { VaRValidationResponse } from "@/lib/api";
@@ -20,7 +19,7 @@ interface VaRBacktestChartProps {
 }
 
 export default function VaRBacktestChart({ validationResult }: VaRBacktestChartProps) {
-  const points = validationResult.validation_points || [];
+  const points = useMemo(() => validationResult.validation_points || [], [validationResult.validation_points]);
 
   // Filter out the exception points for distinct marking
   const exceptions = useMemo(() => {

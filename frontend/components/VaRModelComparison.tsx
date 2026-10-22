@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Award, CheckCircle2, AlertTriangle, ArrowRight, Activity, ShieldCheck, Sparkles, Loader2 } from "lucide-react";
+import { Award, CheckCircle2, Activity, Sparkles, Loader2 } from "lucide-react";
 import { api, VaRCompareResponse, VaRModelComparisonItem } from "@/lib/api";
 
 interface VaRModelComparisonProps {

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Theme is driven by data-theme on <html> (set before first paint by the inline script in layout.tsx). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -11,16 +14,15 @@
   --accent-light: #e0e7ff;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0f1e;
-    --foreground: #e2e8f0;
-    --card: #111827;
-    --card-border: #1f2937;
-    --sidebar-bg: #060d1e;
-    --sidebar-border: #1e293b;
-    --accent-light: #1e1b4b;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0f1e;
+  --foreground: #e2e8f0;
+  --card: #111827;
+  --card-border: #1f2937;
+  --sidebar-bg: #060d1e;
+  --sidebar-border: #1e293b;
+  --accent-light: #1e1b4b;
 }
 
 * {
@@ -60,9 +62,7 @@ body {
 .badge-elevated { background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
 .badge-high { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
 
-@media (prefers-color-scheme: dark) {
-  .badge-low { background: #14532d; color: #86efac; border-color: #166534; }
-  .badge-moderate { background: #422006; color: #fde047; border-color: #713f12; }
-  .badge-elevated { background: #431407; color: #fb923c; border-color: #7c2d12; }
-  .badge-high { background: #450a0a; color: #f87171; border-color: #7f1d1d; }
-}
+[data-theme="dark"] .badge-low { background: #14532d; color: #86efac; border-color: #166534; }
+[data-theme="dark"] .badge-moderate { background: #422006; color: #fde047; border-color: #713f12; }
+[data-theme="dark"] .badge-elevated { background: #431407; color: #fb923c; border-color: #7c2d12; }
+[data-theme="dark"] .badge-high { background: #450a0a; color: #f87171; border-color: #7f1d1d; }

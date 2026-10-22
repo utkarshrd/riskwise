@@ -32,6 +32,7 @@ export default function NSEStockSearch({
   const [results, setResults] = useState<StockSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -45,37 +46,40 @@ export default function NSEStockSearch({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const hasCriteria = Boolean(query.trim() || selectedSector || selectedIndex || selectedCap);
+  // Stale results are never shown once the criteria are cleared
+  const visibleResults = hasCriteria ? results : [];
+
   // Debounced search when query or filter chips change
   useEffect(() => {
-    if (!query.trim() && !selectedSector && !selectedIndex && !selectedCap) {
-      setResults([]);
-      return;
-    }
+    if (!hasCriteria) return;
 
+    let cancelled = false;
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError(null);
       try {
-        const res = await api.market.search(
-          query.trim(),
-          15,
-          activeCurrency,
-          {
-            sector: selectedSector || undefined,
-            index: selectedIndex || undefined,
-            cap_bucket: selectedCap || undefined,
-          }
-        );
+        const res = await api.market.search(query.trim(), 15, activeCurrency, {
+          sector: selectedSector || undefined,
+          index: selectedIndex || undefined,
+          cap_bucket: selectedCap || undefined,
+        });
+        if (cancelled) return;
         setResults(res.results || []);
         setIsOpen(true);
       } catch (err) {
-        console.error("Search error:", err);
+        if (cancelled) return;
+        setSearchError(err instanceof Error ? err.message : "Search failed.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }, 200);
 
-    return () => clearTimeout(timer);
-  }, [query, selectedSector, selectedIndex, selectedCap, activeCurrency]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [hasCriteria, query, selectedSector, selectedIndex, selectedCap, activeCurrency]);
 
   return (
     <div className="relative w-full space-y-2" ref={dropdownRef}>
@@ -90,11 +94,11 @@ export default function NSEStockSearch({
             setIsOpen(true);
           }}
           onFocus={() => {
-            if (results.length > 0 || selectedSector || selectedIndex || selectedCap) {
+            if (visibleResults.length > 0 || hasCriteria) {
               setIsOpen(true);
             }
           }}
-          placeholder="Search 2,600+ NSE/US equities by symbol, company name, or ISIN (e.g., RELIANCE, TCS, SPY)..."
+          placeholder="Search NSE/US stocks by symbol, name or ISIN (e.g. RELIANCE, SPY)"
           className="w-full pl-9 pr-9 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
         />
         {loading && (
@@ -185,6 +189,7 @@ export default function NSEStockSearch({
               setSelectedCap(null);
               setQuery("");
               setResults([]);
+              setSearchError(null);
             }}
             className="text-[10px] text-slate-400 hover:text-rose-500 underline ml-1"
           >
@@ -194,14 +199,20 @@ export default function NSEStockSearch({
       </div>
 
       {/* Dropdown Results Box */}
-      {isOpen && results.length > 0 && (
+      {searchError && (
+        <p role="alert" className="text-[11px] text-red-600 dark:text-red-400">
+          Search unavailable: {searchError}
+        </p>
+      )}
+
+      {isOpen && visibleResults.length > 0 && (
         <div className="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl divide-y divide-slate-100 dark:divide-slate-800">
           <div className="p-2 text-[10px] font-semibold text-slate-400 bg-slate-50 dark:bg-slate-800/50 uppercase tracking-wider flex justify-between items-center">
-            <span>Matching Instruments ({results.length})</span>
+            <span>Matching Instruments ({visibleResults.length})</span>
             <span className="text-[9px] text-slate-500 font-normal">Click to add to portfolio</span>
           </div>
 
-          {results.map((item) => {
+          {visibleResults.map((item) => {
             const isAlreadyAdded = disabledSymbols.includes(item.symbol);
             return (
               <div

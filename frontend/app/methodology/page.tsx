@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BookOpen, ShieldCheck, AlertTriangle, FileText } from "lucide-react";
 
 export default function MethodologyPage() {
@@ -6,7 +7,7 @@ export default function MethodologyPage() {
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
           <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
-            Milestone 0 Reference
+            Reference
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
@@ -36,6 +37,12 @@ export default function MethodologyPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
             Value at Risk (VaR) is evaluated using historical and parametric normal distributions at 95% and 99% confidence horizons. VaR is a probabilistic estimate of tail loss, NOT a maximum loss boundary. Volatility is annualized using an explicit 252 trading-day convention.
           </p>
+          <Link
+            href="/methodology/market-risk"
+            className="inline-block text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            Formulas and references for every method →
+          </Link>
         </div>
 
         <div className="p-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">

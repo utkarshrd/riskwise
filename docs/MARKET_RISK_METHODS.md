@@ -310,18 +310,24 @@ LR_cc = LR_uc + LR_ind ~ χ²(2) under H₀
 
 ## 14. Performance & Factor Metrics
 
-### Sharpe Ratio (Rf = 0%)
+### Sharpe Ratio
 
 ```
-SR = μ_ann / σ_ann = (μ_d × 252) / (σ_d × √252) = (μ_d / σ_d) × √252
+SR = (μ_ann − Rf) / σ_ann        μ_ann = μ_d × 252,   σ_ann = σ_d × √252
 ```
+
+`Rf` is a fixed annual proxy, not a live rate: **6% for INR portfolios** and **5% for USD portfolios**
+(`DEFAULT_RISK_FREE_INR` / `DEFAULT_RISK_FREE_USD` in `risk/returns.py`). The value used is returned in
+`assumptions.risk_free_rate` on every analyze response.
 
 ### Sortino Ratio
 
 ```
-Sortino = μ_ann / σ_down_ann
-σ_down = √(1/T × Σ min(R_t, 0)²)
+Sortino = (μ_ann − Rf) / σ_down_ann
+σ_down_ann = √(1/T × Σ min(R_t, 0)²) × √252
 ```
+
+Same `Rf` as the Sharpe ratio. Only downside returns enter the denominator.
 
 ### Maximum Drawdown
 
@@ -353,4 +359,45 @@ The method with the highest composite score is recommended with a plain-English 
 
 ---
 
-*Last updated: 2026-10-22 — RiskWise Tier A upgrade (A1–A6).*
+## 16. Volatility, Returns & Correlation Conventions
+
+### Loss Convention
+
+```
+L_t = −R_t        (a loss is a positive number)
+```
+
+A 95% 1-day VaR of 2.14% means that on 5% of days the portfolio loss is expected to exceed 2.14%.
+VaR is a threshold, not a worst case.
+
+### Annualized Volatility
+
+```
+σ_ann = σ_d × √252        σ_d = sample standard deviation (ddof = 1) of daily portfolio returns
+```
+
+### Mean Daily Return
+
+```
+μ_d = (1/T) × Σ R_t       R_t = Σ_i w_i × r_{i,t}   (constant weights, rebalanced daily)
+```
+
+### Cumulative Return and Drawdown Series
+
+The charts use the same daily portfolio return series as every other metric:
+
+```
+Wealth_t   = Π (1 + R_s)            (exp of the cumulative sum for log returns)
+Cumulative = Wealth_t − 1
+Drawdown_t = Wealth_t / max(1, max_{s≤t} Wealth_s) − 1
+```
+
+The benchmark curve is compounded over the dates it shares with the portfolio.
+
+### Correlation Matrix
+
+Pearson correlation of daily asset returns over the aligned lookback window.
+
+---
+
+*Last updated: 2026-10-22 — Sharpe/Sortino risk-free proxy corrected; section 16 added.*
