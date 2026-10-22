@@ -273,3 +273,86 @@ class SymbolValidateResponse(BaseModel):
     error_reason: str | None = None
     message: str
 
+
+
+class StressReplayRequest(FxModeFields):
+    holdings: list[HoldingSchema] = Field(..., min_length=1)
+    currency: str | None = Field(default=None, description="Portfolio base currency; inferred in strict mode when omitted")
+    portfolio_value: float | None = Field(default=None, gt=0.0)
+    scenarios: list[str] | None = Field(
+        default=None, description="Scenario ids to replay (covid_2020, election_2024, adani_2023). Default: all."
+    )
+
+
+class ReplayContribution(BaseModel):
+    symbol: str
+    weight: float
+    covered_weight_share: float
+    start_date: str
+    end_date: str
+    start_price: float
+    end_price: float
+    # "return" is a reserved word in Python, exposed under its API name through the alias
+    asset_return: float = Field(alias="return")
+    trough_return: float
+    contribution: float
+
+    model_config = {"populate_by_name": True}
+
+
+class SkippedHolding(BaseModel):
+    symbol: str
+    reason: str
+
+
+class StressReplayScenario(BaseModel):
+    id: str
+    name: str
+    description: str
+    window_start: str
+    window_end: str
+    status: str
+    currency: str
+    data_source: str
+    covered_weight: float
+    skipped: list[SkippedHolding]
+    contributions: list[ReplayContribution]
+    portfolio_return: float | None = None
+    portfolio_loss_pct: float | None = None
+    portfolio_loss_amount: float | None = None
+    fx: dict[str, Any] | None = None
+
+
+class ReverseStressRequest(FxModeFields):
+    holdings: list[HoldingSchema] = Field(..., min_length=1)
+    currency: str | None = None
+    target_loss_pct: float | None = Field(default=None, gt=0.0, lt=1.0, description="Loss as a fraction of the portfolio, e.g. 0.2 for 20%")
+    target_loss_amount: float | None = Field(default=None, gt=0.0, description="Loss in currency units; needs portfolio_value")
+    portfolio_value: float | None = Field(default=None, gt=0.0)
+    lookback_days: int = Field(default=252, ge=60, le=1000)
+    benchmark_symbol: str | None = None
+
+
+class ReverseStressContribution(BaseModel):
+    symbol: str
+    weight: float
+    beta: float
+    shock: float
+    contribution: float
+
+
+class ReverseStressResponse(BaseModel):
+    currency: str
+    target_loss_pct: float
+    target_loss_amount: float | None = None
+    uniform_asset_shock: float
+    uniform_contributions: list[ReverseStressContribution]
+    benchmark_symbol: str
+    lookback_observations: int
+    lookback_start: str
+    lookback_end: str
+    portfolio_beta: float
+    implied_benchmark_shock: float | None = None
+    beta_contributions: list[ReverseStressContribution]
+    note: str | None = None
+    fx: dict[str, Any] | None = None

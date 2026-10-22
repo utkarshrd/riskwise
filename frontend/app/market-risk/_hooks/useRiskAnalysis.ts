@@ -25,6 +25,8 @@ export function useRiskAnalysis() {
   const [stressLoading, setStressLoading] = useState(false);
   const [stressError, setStressError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The request behind the current results, so follow-up tools (stress lab) use the same portfolio
+  const [request, setRequest] = useState<AnalysisRequest | null>(null);
 
   const run = useCallback(async (req: AnalysisRequest) => {
     setLoading(true);
@@ -33,6 +35,7 @@ export function useRiskAnalysis() {
     try {
       const res = await api.market.analyze(req);
       setMetrics(res);
+      setRequest(req);
 
       setStressLoading(true);
       try {
@@ -52,10 +55,11 @@ export function useRiskAnalysis() {
 
   const reset = useCallback(() => {
     setMetrics(null);
+    setRequest(null);
     setStressResults(null);
     setStressError(null);
     setError(null);
   }, []);
 
-  return { metrics, stressResults, loading, stressLoading, stressError, error, setError, run, reset };
+  return { metrics, request, stressResults, loading, stressLoading, stressError, error, setError, run, reset };
 }

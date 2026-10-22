@@ -398,6 +398,42 @@ The benchmark curve is compounded over the dates it shares with the portfolio.
 
 Pearson correlation of daily asset returns over the aligned lookback window.
 
+## 17. Named Historical Stress Replays & Reverse Stress
+
+### Named Event Replay
+
+Each event is a fixed pair of dates. A holding's return is measured between the last close on or before the start date and the last close on or before the end date, from real adjusted prices (Yahoo Finance, cached in `data/stress_windows/`).
+
+| Event | Start close | End close |
+|-------|-------------|-----------|
+| COVID-19 crash | 2020-02-19 (S&P 500 peak) | 2020-03-23 (S&P 500 low) |
+| Indian election result day | 2024-06-03 | 2024-06-04 |
+| Adani sell-off | 2023-01-24 (before the Hindenburg report) | 2023-02-28 |
+
+```
+r_i = P_i(end) / P_i(start) - 1
+portfolio return = Σ (w_i / W) × r_i        W = Σ w_i over holdings that have prices
+contribution_i   = (w_i / W) × r_i          (the bars of the waterfall; they sum to the portfolio return)
+lowest point_i   = min over the window of P_i(t) / P_i(start) - 1
+```
+
+A holding with no price on or before the start date (not yet listed) or no provider data is **skipped and listed with the reason**, never filled in. The result then describes only the covered holdings, re-weighted to 100%, and the covered share of the portfolio is shown. If nothing is covered the event is reported as unavailable. With `fx_mode = convert_to_base`, prices are converted into the base currency with the `USDINR=X` close of the same day before returns are taken.
+
+### Reverse Stress
+
+Given a target portfolio loss `L` (a percentage, or an amount divided by the portfolio value), two answers are returned.
+
+```
+Uniform shock:     every holding falls by L              (weights sum to 1, so the portfolio loses L)
+Benchmark shock:   s = -L / β_p                          β_p = Σ w_i × β_i
+                   holding i then moves by β_i × s       (contributions w_i × β_i × s sum to -L)
+β_i = Cov(r_i, r_B) / Var(r_B)                           over the lookback window (default 252 days)
+```
+
+The benchmark is ^NSEI for INR portfolios and SPY for USD portfolios unless chosen. If `β_p ≤ 0`, no benchmark fall can produce the loss and only the uniform answer applies. If the beta model implies a fall of 100% or more for the benchmark or a holding, a warning is returned, because a long-only position cannot lose more than everything. Betas are historical and can be unstable.
+
 ---
 
-*Last updated: 2026-10-22 — Sharpe/Sortino risk-free proxy corrected; section 16 added.*
+---
+
+*Last updated: 2026-10-22 — sections 16 and 17 added; Sharpe/Sortino risk-free proxy corrected.*

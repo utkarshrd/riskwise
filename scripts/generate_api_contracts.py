@@ -31,6 +31,15 @@ PRD_ENDPOINTS = [
     ("GET", "/api/v1/methodology", "Return method definitions, data limitations and disclaimer text")
 ]
 
+# Endpoints added after the PRD, documented alongside it
+EXTENSION_ENDPOINTS = [
+    ("GET", "/api/v1/market/search", "Search the NSE/US instrument master with sector, index and cap filters"),
+    ("POST", "/api/v1/market/validate-symbol", "Check that a symbol has usable price history, fetching it lazily if needed"),
+    ("POST", "/api/v1/market/var/compare", "Backtest several VaR methods on one window and recommend one"),
+    ("POST", "/api/v1/market/portfolio/stress/replay", "Replay COVID 2020, 4 Jun 2024 and Adani 2023 against a portfolio using real prices"),
+    ("POST", "/api/v1/market/portfolio/stress/reverse", "Find the shock that produces a chosen portfolio loss"),
+]
+
 
 def generate_contracts():
     schema = app.openapi()
@@ -61,13 +70,27 @@ def generate_contracts():
 
     lines.extend([
         "",
+        "### Additional endpoints (beyond the PRD)",
+        "",
+        "| Method | Endpoint | Purpose | OpenAPI Match |",
+        "|:---:|:---|:---|:---:|",
+    ])
+    for method, endpoint, purpose in EXTENSION_ENDPOINTS:
+        present = method.lower() in paths.get(endpoint, {})
+        lines.append(f"| `{method}` | `{endpoint}` | {purpose} | {'Yes' if present else 'No'} |")
+
+    lines.extend([
+        "",
+        "Market endpoints that load prices accept `fx_mode`: `strict` (default) rejects mixed USD/INR portfolios, "
+        "`convert_to_base` converts into the portfolio currency with daily `USDINR=X` rates and states the FX series and date range in the response `fx` block.",
+        "",
         "---",
         "",
         "## 2. Detailed Endpoint Contracts",
         ""
     ])
 
-    for method, endpoint, purpose in PRD_ENDPOINTS:
+    for method, endpoint, purpose in PRD_ENDPOINTS + EXTENSION_ENDPOINTS:
         path_obj = paths.get(endpoint, {})
         op = path_obj.get(method.lower(), {})
         if not op:

@@ -2,9 +2,10 @@ import { PieChart } from "lucide-react";
 import MarketRiskCharts from "@/components/MarketRiskCharts";
 import FxSummary from "@/components/portfolio/FxSummary";
 import { Alert, Badge, EmptyState, ResultsSkeleton } from "@/components/ui";
-import type { PortfolioRiskMetrics, StressScenarioResult } from "@/lib/api";
+import type { PortfolioRiskMetrics, StressInput, StressScenarioResult } from "@/lib/api";
 import CorrelationMatrix from "./CorrelationMatrix";
 import MetricGrid from "./MetricGrid";
+import StressLab from "./StressLab";
 import StressSection from "./StressSection";
 import VarTable from "./VarTable";
 
@@ -14,6 +15,7 @@ interface ResultsPanelProps {
   stressResults: StressScenarioResult[] | null;
   stressLoading: boolean;
   stressError: string | null;
+  stressInput: StressInput | null;
 }
 
 function sourceLabel(mode?: string): string {
@@ -21,7 +23,7 @@ function sourceLabel(mode?: string): string {
   return "Verified snapshot";
 }
 
-export default function ResultsPanel({ metrics, loading, stressResults, stressLoading, stressError }: ResultsPanelProps) {
+export default function ResultsPanel({ metrics, loading, stressResults, stressLoading, stressError, stressInput }: ResultsPanelProps) {
   if (loading) return <ResultsSkeleton label="Computing risk metrics" />;
 
   if (!metrics) {
@@ -64,6 +66,7 @@ export default function ResultsPanel({ metrics, loading, stressResults, stressLo
       <MarketRiskCharts metrics={metrics} currency={metrics.currency} />
       <CorrelationMatrix metrics={metrics} />
       <StressSection metrics={metrics} results={stressResults} loading={stressLoading} error={stressError} />
+      <StressLab input={stressInput} />
     </div>
   );
 }

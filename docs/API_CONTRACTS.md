@@ -28,6 +28,18 @@
 | `POST` | `/api/v1/copilot/message` | Run bounded LangGraph flow and return answer, sources and tool trace summary | Yes | **VERIFIED** |
 | `GET` | `/api/v1/methodology` | Return method definitions, data limitations and disclaimer text | Yes | **VERIFIED** |
 
+### Additional endpoints (beyond the PRD)
+
+| Method | Endpoint | Purpose | OpenAPI Match |
+|:---:|:---|:---|:---:|
+| `GET` | `/api/v1/market/search` | Search the NSE/US instrument master with sector, index and cap filters | Yes |
+| `POST` | `/api/v1/market/validate-symbol` | Check that a symbol has usable price history, fetching it lazily if needed | Yes |
+| `POST` | `/api/v1/market/var/compare` | Backtest several VaR methods on one window and recommend one | Yes |
+| `POST` | `/api/v1/market/portfolio/stress/replay` | Replay COVID 2020, 4 Jun 2024 and Adani 2023 against a portfolio using real prices | Yes |
+| `POST` | `/api/v1/market/portfolio/stress/reverse` | Find the shock that produces a chosen portfolio loss | Yes |
+
+Market endpoints that load prices accept `fx_mode`: `strict` (default) rejects mixed USD/INR portfolios, `convert_to_base` converts into the portfolio currency with daily `USDINR=X` rates and states the FX series and date range in the response `fx` block.
+
 ---
 
 ## 2. Detailed Endpoint Contracts
@@ -468,6 +480,157 @@ Refuses promotion if challenger does not meet PRD improvement criteria.
   ```json
   {
     "$ref": "#/components/schemas/MethodologyResponse"
+  }
+  ```
+
+---
+
+### `GET /api/v1/market/search`
+**Summary:** Search Market Stocks  
+**Description:** Search supported stocks across NSE, BSE, and US markets with sector, index, and cap_bucket filters.
+Returns DB-backed ranked fuzzy search results with pagination.  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "$ref": "#/components/schemas/StockSearchResponse"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
+
+---
+
+### `POST /api/v1/market/validate-symbol`
+**Summary:** Validate Market Symbol  
+**Description:** Validates a symbol's availability:
+- verified_snapshot: Already available as validated local CSV snapshot
+- live_validated: Retrieved and validated on-the-fly from live market data provider
+- not_available: Quote not found, delisted, insufficient history, or provider error  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Request Body (application/json):**
+```json
+{
+  "$ref": "#/components/schemas/SymbolValidateRequest"
+}
+```
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "$ref": "#/components/schemas/SymbolValidateResponse"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
+
+---
+
+### `POST /api/v1/market/var/compare`
+**Summary:** Var Model Compare  
+**Description:** Side-by-side VaR model comparison using rolling backtests.
+
+Runs the same rolling out-of-sample backtest for each candidate model
+(historical, parametric, student_t, cornish_fisher, ewma by default, or
+the list provided via the `methods` query parameter) and returns a ranked
+scorecard plus a plain-English model recommendation.
+
+Scoring penalises deviation from the expected exception rate, Basel
+YELLOW/RED zones, Kupiec POF test failure, and Christoffersen conditional
+coverage failure.  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Request Body (application/json):**
+```json
+{
+  "$ref": "#/components/schemas/VaRCompareRequest"
+}
+```
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "$ref": "#/components/schemas/VaRCompareResponse"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
+
+---
+
+### `POST /api/v1/market/portfolio/stress/replay`
+**Summary:** Replay Named Stress Scenarios  
+**Description:** Replay named historical events (COVID Feb-Mar 2020, 4 Jun 2024 election day, Adani Jan-Feb 2023) against the
+portfolio using real prices. Holdings with no data in a window are skipped and listed, never filled in.  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Request Body (application/json):**
+```json
+{
+  "$ref": "#/components/schemas/StressReplayRequest"
+}
+```
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "items": {
+      "$ref": "#/components/schemas/StressReplayScenario"
+    },
+    "type": "array",
+    "title": "Response Replay Named Stress Scenarios Api V1 Market Portfolio Stress Replay Post"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
+
+---
+
+### `POST /api/v1/market/portfolio/stress/reverse`
+**Summary:** Reverse Stress Test  
+**Description:** The uniform shock, and the benchmark fall at the portfolio's beta, that produce a given portfolio loss.  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Request Body (application/json):**
+```json
+{
+  "$ref": "#/components/schemas/ReverseStressRequest"
+}
+```
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "$ref": "#/components/schemas/ReverseStressResponse"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
   }
   ```
 

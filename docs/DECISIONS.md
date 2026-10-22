@@ -213,3 +213,16 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Tests:** `test_fx_mode.py` (13). Includes an independent rebuild of the converted portfolio from the raw CSVs that matches the reported volatility to 6e-5.
 - **UI:** a "Allow mixed USD and INR holdings" checkbox on Market Risk and VaR Validation, a one-click "Convert to X" on the mixed-currency error, and an FX summary card on results. While conversion is on, symbol search is not filtered by currency and no `.NS` suffix is auto-added.
 - **Limit:** FX rates come from the same offline snapshot or live Yahoo series as prices; days without an FX quote are dropped from the aligned window.
+
+## B3: Named stress replays and reverse stress (2026-10-22)
+- **Decision:** `POST /market/portfolio/stress/replay` and `/stress/reverse`, plus a Stress Lab section on the Market Risk page with a waterfall chart of per-holding contributions.
+- **Reasoning:**
+  1. The price snapshots cover only two years, so the three events (COVID 2020, 4 Jun 2024, Adani 2023) need dedicated historical downloads. `YahooWindowProvider` fetches each window and caches it in `data/stress_windows/` (real Yahoo adjusted closes, 50 KB), so replays are repeatable offline. It sits behind a small interface so tests can substitute a fixture provider.
+  2. Event dates are fixed and documented (methods doc §17), not chosen from the data: base price is the last close on or before the start date, end price the last close on or before the end date.
+  3. A holding with no data in a window is skipped and reported with the reason (for example ETERNAL.NS was not listed in 2020). The result is then the covered holdings re-weighted to 100%, with the covered share shown. Filling the gap with zero or a proxy would have been invented data.
+  4. "Uniform market shock" has two honest readings, so both are returned: every holding falls by the target loss (weights sum to 1), and the benchmark fall that causes it at the portfolio beta (`-L / beta_p`). If beta is not positive, or the implied fall is 100% or more, the response says so instead of returning a number.
+  5. `fx_mode` works here too: prices are converted with the same day's `USDINR=X` close before returns are taken.
+- **Verified on real data:** a Reliance / TCS / HDFC Bank / Adani Enterprises / Zomato portfolio lost 35.4% on the covered 92% over the COVID window (Zomato skipped), 7.1% on election day and 14.7% over Jan to Feb 2023 (Adani Enterprises -60%). A 50/50 Reliance and TCS portfolio needs a 23.2% Nifty fall for a 20% loss at beta 0.86.
+- **Tests:** `test_stress_replay.py` (24): hand-computed weighted returns, base-date rule, skipping and re-weighting, FX conversion by that day's rate, the API contract, and the reverse-stress identities (contributions sum to the target; beta 1 for the benchmark itself).
+- **Limits:** a first replay for a symbol needs network access; Yahoo may lack data for delisted names (they are skipped and listed). Betas are historical estimates over the last 252 days.
+- **Docs:** `generate_api_contracts.py` now also documents the endpoints added since the PRD.

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Alert } from "@/components/ui";
 import { usePortfolioBuilder } from "@/hooks/usePortfolioBuilder";
 import MarketHeader from "./_components/MarketHeader";
@@ -23,6 +24,16 @@ export default function MarketRiskPage() {
     onSymbolVerified: universe.addSymbol,
     onPortfolioReset: analysis.reset,
   });
+
+  // Same portfolio as the results on screen, so the stress lab always matches what the user is looking at
+  const req = analysis.request;
+  const stressInput = useMemo(
+    () =>
+      req
+        ? { holdings: req.holdings, currency: req.currency, fx_mode: req.fx_mode, portfolio_value: req.portfolio_value }
+        : null,
+    [req]
+  );
 
   const runAnalysis = () =>
     analysis.run({
@@ -80,6 +91,7 @@ export default function MarketRiskPage() {
             stressResults={analysis.stressResults}
             stressLoading={analysis.stressLoading}
             stressError={analysis.stressError}
+            stressInput={stressInput}
           />
         </div>
       </div>

@@ -248,6 +248,69 @@ export interface ChartSeries {
   histogram: { lo: number; hi: number; count: number }[];
 }
 
+export interface ReplayContribution {
+  symbol: string;
+  weight: number;
+  covered_weight_share: number;
+  start_date: string;
+  end_date: string;
+  start_price: number;
+  end_price: number;
+  return: number;
+  trough_return: number;
+  contribution: number;
+}
+
+export interface StressReplayScenario {
+  id: string;
+  name: string;
+  description: string;
+  window_start: string;
+  window_end: string;
+  status: "ok" | "unavailable";
+  currency: string;
+  data_source: string;
+  covered_weight: number;
+  skipped: { symbol: string; reason: string }[];
+  contributions: ReplayContribution[];
+  portfolio_return: number | null;
+  portfolio_loss_pct: number | null;
+  portfolio_loss_amount: number | null;
+  fx?: Record<string, unknown> | null;
+}
+
+export interface ReverseStressContribution {
+  symbol: string;
+  weight: number;
+  beta: number;
+  shock: number;
+  contribution: number;
+}
+
+export interface ReverseStressResult {
+  currency: string;
+  target_loss_pct: number;
+  target_loss_amount: number | null;
+  uniform_asset_shock: number;
+  uniform_contributions: ReverseStressContribution[];
+  benchmark_symbol: string;
+  lookback_observations: number;
+  lookback_start: string;
+  lookback_end: string;
+  portfolio_beta: number;
+  implied_benchmark_shock: number | null;
+  beta_contributions: ReverseStressContribution[];
+  note: string | null;
+  fx?: FxInfo | null;
+}
+
+export interface StressInput {
+  holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;
+  currency: string;
+  fx_mode: FxMode;
+  portfolio_value?: number;
+}
+
 export interface StressScenarioResult {
   scenario_name: string;
   portfolio_loss_pct: number;
@@ -526,6 +589,16 @@ export const api = {
       apiFetch<StressScenarioResult[]>("/api/v1/market/portfolio/stress-test", {
         method: "POST",
         body: JSON.stringify({ holdings, custom_scenarios, ...fx }),
+      }),
+    stressReplay: (input: StressInput, scenarios?: string[]) =>
+      apiFetch<StressReplayScenario[]>("/api/v1/market/portfolio/stress/replay", {
+        method: "POST",
+        body: JSON.stringify({ ...input, scenarios }),
+      }),
+    stressReverse: (input: StressInput, target: { target_loss_pct?: number; target_loss_amount?: number }) =>
+      apiFetch<ReverseStressResult>("/api/v1/market/portfolio/stress/reverse", {
+        method: "POST",
+        body: JSON.stringify({ ...input, ...target }),
       }),
     validateVar: (params: {
       holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;

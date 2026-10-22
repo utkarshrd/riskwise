@@ -138,6 +138,16 @@ export const METRIC_DOCS = {
     summary: "Compounded portfolio return over the window, drawn against the benchmark over the same dates.",
     heading: "Cumulative Return and Drawdown Series",
   },
+  stress_replay: {
+    label: "Named event replay",
+    summary: "What each holding actually did between two fixed dates of a real market event, weighted by the portfolio. Holdings without prices are skipped and listed.",
+    heading: "Named Event Replay",
+  },
+  reverse_stress: {
+    label: "Reverse stress",
+    summary: "Works backwards from a loss you pick to the market fall that would cause it, using each holding's beta to the benchmark.",
+    heading: "Reverse Stress",
+  },
   correlation: {
     label: "Correlation",
     summary: "Pearson correlation of daily returns between each pair of holdings. High values mean less diversification.",

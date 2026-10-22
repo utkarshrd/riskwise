@@ -11,8 +11,12 @@ from backend.app.schemas.market import (
     PortfolioAnalyzeRequest,
     PortfolioAnalyzeResponse,
     PortfolioStressTestRequest,
+    ReverseStressRequest,
+    ReverseStressResponse,
     StockSearchResponse,
     StockSearchResult,
+    StressReplayRequest,
+    StressReplayScenario,
     StressScenarioResponse,
     SymbolValidateRequest,
     SymbolValidateResponse,
@@ -25,6 +29,7 @@ from backend.app.schemas.market import (
 )
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine, StressScenario
 from backend.app.services.market_risk.market_data_service import MarketDataService
+from backend.app.services.market_risk.stress import StressService
 from backend.app.services.market_risk.ticker_normalizer import (
     SYMBOL_CATALOGUE,
     get_symbol_currency,
@@ -253,6 +258,55 @@ def run_market_stress_test(request: PortfolioStressTestRequest):
         msg = str(e)
         field = "holdings.weight" if "weights" in msg.lower() else "custom_scenarios"
         raise HTTPException(status_code=400, detail={"field": field, "message": msg}) from e
+
+
+def get_stress_service() -> StressService:
+    """Dependency so tests can swap the price provider."""
+    return StressService()
+
+
+def _holdings(request_holdings) -> list[Holding]:
+    return [Holding(symbol=h.symbol, weight=h.weight, position_value=h.position_value) for h in request_holdings]
+
+
+@router.post("/portfolio/stress/replay", response_model=list[StressReplayScenario], response_model_by_alias=True)
+def replay_named_stress_scenarios(request: StressReplayRequest, service: StressService = Depends(get_stress_service)):
+    """
+    Replay named historical events (COVID Feb-Mar 2020, 4 Jun 2024 election day, Adani Jan-Feb 2023) against the
+    portfolio using real prices. Holdings with no data in a window are skipped and listed, never filled in.
+    """
+    try:
+        return service.replay(
+            holdings=_holdings(request.holdings),
+            currency=request.currency,
+            fx_mode=request.fx_mode,
+            scenario_ids=request.scenarios,
+            portfolio_value=request.portfolio_value,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail={"field": "holdings.symbol", "message": str(e)}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"field": "scenarios", "message": str(e)}) from e
+
+
+@router.post("/portfolio/stress/reverse", response_model=ReverseStressResponse)
+def reverse_stress_test(request: ReverseStressRequest, service: StressService = Depends(get_stress_service)):
+    """The uniform shock, and the benchmark fall at the portfolio's beta, that produce a given portfolio loss."""
+    try:
+        return service.reverse(
+            holdings=_holdings(request.holdings),
+            currency=request.currency,
+            target_loss_pct=request.target_loss_pct,
+            target_loss_amount=request.target_loss_amount,
+            portfolio_value=request.portfolio_value,
+            fx_mode=request.fx_mode,
+            lookback_days=request.lookback_days,
+            benchmark_symbol=request.benchmark_symbol,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail={"field": "holdings.symbol", "message": str(e)}) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"field": "target_loss_pct", "message": str(e)}) from e
 
 
 @router.post("/var/validate", response_model=VaRValidationResponse)
