@@ -60,6 +60,10 @@ class PortfolioRiskMetrics(BaseModel):
     drawdown_table: list[dict[str, Any]] | None = None
     component_var_pct: dict[str, float] | None = None
     marginal_var: dict[str, float] | None = None
+    benchmark_symbol: str | None = None
+    benchmark_volatility: float | None = None
+    beta_to_benchmark: float | None = None
+    correlation_to_benchmark: float | None = None
 
 
 class StressScenario(BaseModel):
@@ -178,6 +182,7 @@ class MarketRiskEngine:
         data_source_mode: str = "offline_snapshot",
         var_method: str = "historical",
         horizon_days: int = 1,
+        benchmark_symbol: str | None = None,
     ) -> PortfolioRiskMetrics:
         if not holdings:
             raise ValueError("Portfolio must contain at least one holding.")
@@ -321,6 +326,24 @@ class MarketRiskEngine:
         # 7. Correlation matrix
         corr_matrix = returns_df[symbols].corr().fillna(0.0).to_dict()
 
+        # 8. Benchmark Beta & Volatility
+        bench_sym = benchmark_symbol or ("^NSEI" if currency.upper() == "INR" else "SPY")
+        benchmark_vol = None
+        beta_to_bench = None
+        corr_to_bench = None
+        try:
+            bench_prices = self.load_price_history([bench_sym], allow_live=True)
+            bench_ret = _ret.simple_returns(bench_prices[bench_sym])
+            aligned_port, aligned_bench = port_returns_series.align(bench_ret, join="inner")
+            if len(aligned_port) >= 10:
+                benchmark_vol = round(_ret.annualized_volatility(aligned_bench), 4)
+                computed_b = _ret.beta(aligned_port, aligned_bench)
+                beta_to_bench = round(float(computed_b), 4) if not math.isnan(computed_b) else None
+                computed_c = float(aligned_port.corr(aligned_bench))
+                corr_to_bench = round(computed_c, 4) if not math.isnan(computed_c) else None
+        except Exception:
+            pass
+
         start_dt = str(prices.index[0].date())
         end_dt = str(prices.index[-1].date())
 
@@ -397,6 +420,10 @@ class MarketRiskEngine:
             drawdown_table=dd_table_data,
             component_var_pct=comp_var_pct,
             marginal_var=marg_var,
+            benchmark_symbol=bench_sym if beta_to_bench is not None else None,
+            benchmark_volatility=benchmark_vol,
+            beta_to_benchmark=beta_to_bench,
+            correlation_to_benchmark=corr_to_bench,
         )
 
 

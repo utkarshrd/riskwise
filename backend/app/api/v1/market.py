@@ -16,6 +16,9 @@ from backend.app.schemas.market import (
     StressScenarioResponse,
     SymbolValidateRequest,
     SymbolValidateResponse,
+    VaRCompareRequest,
+    VaRCompareResponse,
+    VaRModelComparisonItem,
     VaRValidationHistoryItem,
     VaRValidationRequest,
     VaRValidationResponse,
@@ -34,7 +37,7 @@ router = APIRouter(prefix="/market", tags=["Portfolio Market Risk Lab & VaR Vali
 
 
 @router.get("/universe")
-def get_market_universe(db: Session = Depends(get_db)):
+def get_market_universe(limit: int = 100, db: Session = Depends(get_db)):
     """Return available market symbols, data coverage, currency, provenance, and instrument metadata."""
     manifest_file = settings.DATA_DIR / "manifests" / "market_manifest.json"
     snapshots_dir = settings.DATA_DIR / "market_snapshots"
@@ -54,26 +57,63 @@ def get_market_universe(db: Session = Depends(get_db)):
             symbols.append(sym_key)
             symbol_currencies[sym_key] = meta["currency"]
 
-    # Also pull from database Instrument master if populated
-    sectors = set()
-    cap_buckets = set()
-    indices = set()
+    sectors: set[str] = set()
+    cap_buckets: set[str] = set()
+    indices: set[str] = set()
+    total_instruments = len(symbols)
+
     try:
-        db_instruments = db.query(Instrument).filter(Instrument.is_active == True).all()
-        for inst in db_instruments:
-            if inst.symbol not in symbols:
-                symbols.append(inst.symbol)
-                symbol_currencies[inst.symbol] = inst.currency or "INR"
-            if inst.sector:
-                sectors.add(inst.sector)
-            if inst.cap_bucket:
-                cap_buckets.add(inst.cap_bucket)
-            if inst.index_memberships_json:
+        from sqlalchemy import func
+        db_count = db.query(func.count(Instrument.symbol)).filter(Instrument.is_active == True).scalar()
+        if db_count:
+            total_instruments = max(total_instruments, db_count)
+
+        # Distinct facets without full row hydration
+        sector_rows = (
+            db.query(Instrument.sector)
+            .filter(Instrument.is_active == True, Instrument.sector.isnot(None))
+            .distinct()
+            .all()
+        )
+        for r in sector_rows:
+            if r[0]:
+                sectors.add(r[0])
+
+        cap_rows = (
+            db.query(Instrument.cap_bucket)
+            .filter(Instrument.is_active == True, Instrument.cap_bucket.isnot(None))
+            .distinct()
+            .all()
+        )
+        for r in cap_rows:
+            if r[0]:
+                cap_buckets.add(r[0])
+
+        idx_rows = (
+            db.query(Instrument.index_memberships_json)
+            .filter(Instrument.is_active == True, Instrument.index_memberships_json.isnot(None))
+            .all()
+        )
+        for r in idx_rows:
+            if r[0]:
                 try:
-                    for idx in json.loads(inst.index_memberships_json):
+                    for idx in json.loads(r[0]):
                         indices.add(idx)
                 except Exception:
                     pass
+
+        # If sample needed up to limit, pull lightweight columns (symbol, currency)
+        if len(symbols) < limit:
+            sample_rows = (
+                db.query(Instrument.symbol, Instrument.currency)
+                .filter(Instrument.is_active == True)
+                .limit(limit)
+                .all()
+            )
+            for sym, curr in sample_rows:
+                if sym not in symbols:
+                    symbols.append(sym)
+                    symbol_currencies[sym] = curr or "INR"
     except Exception:
         pass
 
@@ -84,11 +124,11 @@ def get_market_universe(db: Session = Depends(get_db)):
         "price_field": "adj_close",
         "supported_symbols": sorted(symbols),
         "symbol_currencies": symbol_currencies,
-        "total_instruments": len(symbols),
+        "total_instruments": total_instruments,
         "sectors": sorted(list(sectors)),
         "cap_buckets": sorted(list(cap_buckets)),
         "indices": sorted(list(indices)),
-        "manifest_present": manifest_file.exists()
+        "manifest_present": manifest_file.exists(),
     }
     return metadata
 
@@ -160,6 +200,7 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest, db: Session = Depends(ge
             portfolio_value=request.portfolio_value,
             var_method=request.var_method,
             horizon_days=request.horizon_days,
+            benchmark_symbol=request.benchmark_symbol,
         )
 
         # Persist run to database
@@ -365,6 +406,59 @@ def get_var_validation_history(limit: int = 20, db: Session = Depends(get_db)):
             )
         )
     return history
+
+
+@router.post("/var/compare", response_model=VaRCompareResponse)
+def var_model_compare(
+    request: VaRCompareRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Side-by-side VaR model comparison using rolling backtests.
+
+    Runs the same rolling out-of-sample backtest for each candidate model
+    (historical, parametric, student_t, cornish_fisher, ewma by default, or
+    the list provided via the `methods` query parameter) and returns a ranked
+    scorecard plus a plain-English model recommendation.
+
+    Scoring penalises deviation from the expected exception rate, Basel
+    YELLOW/RED zones, Kupiec POF test failure, and Christoffersen conditional
+    coverage failure.
+    """
+    validation_engine = VaRValidationEngine()
+    holdings = [
+        Holding(
+            symbol=h.symbol,
+            weight=h.weight,
+            position_value=h.position_value,
+        )
+        for h in request.holdings
+    ]
+    try:
+        result = validation_engine.compare_models(
+            holdings=holdings,
+            portfolio_name=request.portfolio_name,
+            currency=request.currency,
+            confidence_level=request.confidence_level,
+            lookback_window=request.lookback_window,
+            methods=request.methods,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return VaRCompareResponse(
+        portfolio_name=result["portfolio_name"],
+        currency=result["currency"],
+        confidence_level=result["confidence_level"],
+        lookback_window=result["lookback_window"],
+        forecast_count=result["forecast_count"],
+        models=[
+            VaRModelComparisonItem(**m)
+            for m in result["models"]
+        ],
+        recommended_method=result["recommended_method"],
+        recommendation_reason=result["recommendation_reason"],
+    )
 
 
 @router.post("/refresh")

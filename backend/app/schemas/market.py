@@ -155,8 +155,52 @@ class VaRValidationResponse(BaseModel):
     christoffersen_lr_stat: float | None
     christoffersen_p_value: float | None
     christoffersen_test_passed: bool | None
+    christoffersen_cc_stat: float | None = None
+    christoffersen_cc_p_value: float | None = None
+    christoffersen_cc_test_passed: bool | None = None
+    basel_capital_multiplier: float | None = 3.00
     summary_message: str
     validation_points: list[dict[str, Any]]
+
+
+class VaRModelComparisonItem(BaseModel):
+    method: str
+    exceptions: int
+    expected_exceptions: float
+    exception_rate: float
+    expected_exception_rate: float
+    basel_zone: str
+    basel_capital_multiplier: float
+    kupiec_p_value: float | None
+    kupiec_test_passed: bool
+    christoffersen_ind_p_value: float | None
+    christoffersen_ind_passed: bool | None
+    christoffersen_cc_p_value: float | None
+    christoffersen_cc_test_passed: bool | None
+    score: float
+
+
+class VaRCompareRequest(BaseModel):
+    portfolio_name: str = Field(default="Comparison Portfolio")
+    currency: str = Field(default="USD")
+    holdings: list[HoldingSchema] = Field(..., min_length=1)
+    confidence_level: float = Field(default=0.95, ge=0.80, le=0.999)
+    lookback_window: int = Field(default=250, ge=50, description="Rolling estimation window in trading days")
+    methods: list[str] | None = Field(
+        default=None,
+        description="Candidate VaR methods to compare. Defaults to ['historical', 'parametric', 'student_t', 'cornish_fisher', 'ewma'].",
+    )
+
+
+class VaRCompareResponse(BaseModel):
+    portfolio_name: str
+    currency: str
+    confidence_level: float
+    lookback_window: int
+    forecast_count: int
+    models: list[VaRModelComparisonItem]
+    recommended_method: str
+    recommendation_reason: str
 
 
 class StockSearchResult(BaseModel):

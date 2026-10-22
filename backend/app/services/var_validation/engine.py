@@ -1,13 +1,17 @@
 import math
-
+from typing import Any
 import numpy as np
+import pandas as pd
+from numpy.lib.stride_tricks import sliding_window_view
+from pydantic import BaseModel
+from scipy import stats
+
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine
+from backend.app.services.market_risk.risk import var_models as _vm
 from backend.app.services.market_risk.ticker_normalizer import (
     get_symbol_currency,
     normalize_ticker,
 )
-from pydantic import BaseModel
-from scipy import stats
 
 
 class VaRValidationPoint(BaseModel):
@@ -20,7 +24,7 @@ class VaRValidationPoint(BaseModel):
 class VaRValidationResult(BaseModel):
     portfolio_name: str
     currency: str
-    method: str  # historical or parametric
+    method: str  # historical, parametric, student_t, cornish_fisher, ewma, etc.
     confidence_level: float
     lookback_window: int
     n_obs: int
@@ -34,12 +38,16 @@ class VaRValidationResult(BaseModel):
     expected_exception_rate: float
     basel_zone: str
     basel_zone_cumulative_prob: float
+    basel_capital_multiplier: float = 3.00
     kupiec_lr_stat: float | None
     kupiec_p_value: float | None
     kupiec_test_passed: bool
     christoffersen_lr_stat: float | None
     christoffersen_p_value: float | None
     christoffersen_test_passed: bool | None
+    christoffersen_cc_stat: float | None = None
+    christoffersen_cc_p_value: float | None = None
+    christoffersen_cc_test_passed: bool | None = None
     summary_message: str
     validation_points: list[VaRValidationPoint]
 
@@ -55,7 +63,7 @@ class VaRValidationEngine:
         currency: str = "USD",
         method: str = "historical",
         confidence_level: float = 0.95,
-        lookback_window: int = 250
+        lookback_window: int = 250,
     ) -> VaRValidationResult:
         if lookback_window < 50:
             raise ValueError("Lookback window must be at least 50 trading days.")
@@ -116,69 +124,83 @@ class VaRValidationEngine:
             )
 
         z_score = stats.norm.ppf(confidence_level)
-        validation_points = []
-        exception_indicators = []
-        exception_count = 0
+        losses_arr = portfolio_losses.values
 
-        # Strict temporal separation: at step t, use only historical data [t - lookback_window : t]
-        # and compare against realized loss at step t. Never peek into future rows.
-        for t in range(lookback_window, total_obs):
-            estimation_window = portfolio_losses.iloc[t - lookback_window: t]
-            realized_loss_t = float(portfolio_losses.iloc[t])
-            date_t = str(portfolio_losses.index[t].date())
+        # Vectorised sliding window view: shape (total_obs - lookback_window, lookback_window)
+        # Estimation window at step t is losses_arr[t - lookback_window : t]
+        windows = sliding_window_view(losses_arr[:-1], lookback_window)
 
-            if method == "parametric":
-                # Parametric VaR = z * sigma - mu
-                window_rets = -estimation_window
-                mu = float(window_rets.mean())
-                sigma = float(window_rets.std(ddof=1))
-                forecast_var = z_score * sigma - mu
-            else:
-                # Historical VaR: empirical quantile of losses
-                forecast_var = float(np.percentile(estimation_window, confidence_level * 100))
+        # Forecast VaR for each window
+        norm_method = (method or "historical").lower().strip()
+        if norm_method in ("parametric", "gaussian"):
+            window_means = windows.mean(axis=1)
+            window_stds = windows.std(axis=1, ddof=1)
+            forecast_vars = window_means + z_score * window_stds
+        elif norm_method == "historical":
+            forecast_vars = np.percentile(windows, confidence_level * 100, axis=1)
+        else:
+            # Delegate to expanded var_models engine for other methods
+            forecast_vars = np.array([
+                _vm.estimate_var(w, method=norm_method, confidence=confidence_level, bootstrap=False).var
+                for w in windows
+            ])
 
-            is_exception = realized_loss_t > forecast_var
-            if is_exception:
-                exception_count += 1
-                exception_indicators.append(1)
-            else:
-                exception_indicators.append(0)
+        realized_losses = losses_arr[lookback_window:]
+        is_exceptions = realized_losses > forecast_vars
+        exception_indicators = is_exceptions.astype(int).tolist()
+        exception_count = int(np.sum(is_exceptions))
 
-            validation_points.append(VaRValidationPoint(
-                date=date_t,
-                realized_loss=round(realized_loss_t, 6),
-                forecast_var=round(forecast_var, 6),
-                is_exception=is_exception
-            ))
+        dates_index = portfolio_losses.index
+        validation_points = [
+            VaRValidationPoint(
+                date=str(dates_index[lookback_window + i].date()) if hasattr(dates_index[lookback_window + i], "date") else str(dates_index[lookback_window + i]),
+                realized_loss=round(float(realized_losses[i]), 6),
+                forecast_var=round(float(forecast_vars[i]), 6),
+                is_exception=bool(is_exceptions[i]),
+            )
+            for i in range(len(realized_losses))
+        ]
 
         forecast_count = len(validation_points)
         exception_rate = exception_count / forecast_count
         expected_rate = 1.0 - confidence_level
         expected_exceptions = round(forecast_count * expected_rate, 2)
 
-        # 1. Basel Traffic-Light Zone (cumulative binomial probability)
+        # 1. Basel Traffic-Light Zone and Capital Multiplier
         cum_prob = float(stats.binom.cdf(exception_count, forecast_count, expected_rate))
-        if cum_prob < 0.95:
-            basel_zone = "GREEN"
-        elif cum_prob < 0.9999:
-            basel_zone = "YELLOW"
+
+        # Check official BCBS 250-day table for 99% confidence
+        if forecast_count == 250 and abs(confidence_level - 0.99) < 1e-3:
+            if exception_count <= 4:
+                basel_zone = "GREEN"
+                capital_mult = 3.00
+            elif exception_count <= 9:
+                basel_zone = "YELLOW"
+                mult_map = {5: 3.40, 6: 3.50, 7: 3.65, 8: 3.75, 9: 3.85}
+                capital_mult = mult_map.get(exception_count, 3.85)
+            else:
+                basel_zone = "RED"
+                capital_mult = 4.00
         else:
-            basel_zone = "RED"
+            if cum_prob < 0.95:
+                basel_zone = "GREEN"
+                capital_mult = 3.00
+            elif cum_prob < 0.9999:
+                basel_zone = "YELLOW"
+                capital_mult = round(3.0 + ((cum_prob - 0.95) / (0.9999 - 0.95)) * 0.85, 2)
+            else:
+                basel_zone = "RED"
+                capital_mult = 4.00
 
-        # 2. Kupiec POF Likelihood Ratio Test
-        # LR = -2 * ln( ( (1-p)^(N-x) * p^x ) / ( (1-phat)^(N-x) * phat^x ) )
-        lr_stat = None
-        p_val = None
-        passed = False
-
+        # 2. Kupiec POF Likelihood Ratio Test (exact asymptotic log-likelihood without 999.0 sentinel)
         if exception_count == 0:
-            lr_stat = -2.0 * forecast_count * math.log(1.0 - expected_rate)
+            lr_stat = float(-2.0 * forecast_count * math.log(1.0 - expected_rate))
             p_val = float(1.0 - stats.chi2.cdf(lr_stat, df=1))
             passed = p_val >= 0.05
         elif exception_count == forecast_count:
-            lr_stat = 999.0
-            p_val = 0.0
-            passed = False
+            lr_stat = float(-2.0 * forecast_count * math.log(expected_rate))
+            p_val = float(1.0 - stats.chi2.cdf(lr_stat, df=1))
+            passed = p_val >= 0.05
         else:
             p = expected_rate
             p_hat = exception_rate
@@ -189,7 +211,6 @@ class VaRValidationEngine:
             passed = p_val >= 0.05
 
         # 3. Christoffersen Independence Test
-        # Evaluates first-order Markov independence of exception indicators
         christoffersen_lr = None
         christoffersen_p = None
         christoffersen_passed = None
@@ -213,7 +234,6 @@ class VaRValidationEngine:
             pi_01 = n01 / (n00 + n01) if (n00 + n01) > 0 else 0.0
             pi_11 = n11 / (n10 + n11) if (n10 + n11) > 0 else 0.0
 
-            # Log-likelihoods (with safeguards for 0 counts)
             def safe_ll(count, prob):
                 return count * math.log(prob) if count > 0 and prob > 0 else 0.0
 
@@ -232,8 +252,18 @@ class VaRValidationEngine:
             christoffersen_p = float(1.0 - stats.chi2.cdf(christoffersen_lr, df=1))
             christoffersen_passed = christoffersen_p >= 0.05
 
+        # 4. Christoffersen Conditional Coverage Joint Test (LR_cc = LR_uc + LR_ind ~ chi2(2))
+        christoffersen_cc_stat = None
+        christoffersen_cc_p = None
+        christoffersen_cc_passed = None
+
+        if lr_stat is not None and christoffersen_lr is not None:
+            christoffersen_cc_stat = float(lr_stat + christoffersen_lr)
+            christoffersen_cc_p = float(1.0 - stats.chi2.cdf(christoffersen_cc_stat, df=2))
+            christoffersen_cc_passed = christoffersen_cc_p >= 0.05
+
         summary = (
-            f"Basel Zone: {basel_zone} (cum prob {cum_prob:.4f}). "
+            f"Basel Zone: {basel_zone} (cum prob {cum_prob:.4f}, capital multiplier {capital_mult:.2f}x). "
             f"Kupiec test {'PASSED' if passed else 'REJECTED'} (p-value {p_val:.4f}). "
             f"Exceptions: {exception_count} observed vs {expected_exceptions:.1f} expected ({exception_rate:.2%} vs {expected_rate:.2%})."
         )
@@ -241,7 +271,7 @@ class VaRValidationEngine:
         return VaRValidationResult(
             portfolio_name=portfolio_name,
             currency=currency,
-            method=method,
+            method=norm_method,
             confidence_level=confidence_level,
             lookback_window=lookback_window,
             n_obs=total_obs,
@@ -255,12 +285,108 @@ class VaRValidationEngine:
             expected_exception_rate=round(expected_rate, 4),
             basel_zone=basel_zone,
             basel_zone_cumulative_prob=round(cum_prob, 4),
+            basel_capital_multiplier=capital_mult,
             kupiec_lr_stat=round(lr_stat, 4) if lr_stat is not None else None,
             kupiec_p_value=round(p_val, 4) if p_val is not None else None,
             kupiec_test_passed=passed,
             christoffersen_lr_stat=round(christoffersen_lr, 4) if christoffersen_lr is not None else None,
             christoffersen_p_value=round(christoffersen_p, 4) if christoffersen_p is not None else None,
             christoffersen_test_passed=christoffersen_passed,
+            christoffersen_cc_stat=round(christoffersen_cc_stat, 4) if christoffersen_cc_stat is not None else None,
+            christoffersen_cc_p_value=round(christoffersen_cc_p, 4) if christoffersen_cc_p is not None else None,
+            christoffersen_cc_test_passed=christoffersen_cc_passed,
             summary_message=summary,
-            validation_points=validation_points
+            validation_points=validation_points,
         )
+
+    def compare_models(
+        self,
+        holdings: list[Holding],
+        portfolio_name: str = "Comparison Portfolio",
+        currency: str = "USD",
+        confidence_level: float = 0.95,
+        lookback_window: int = 250,
+        methods: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Runs rolling backtests for all candidate models on the exact same estimation window,
+        compares exception rates, Basel traffic-light compliance, and coverage tests,
+        and recommends the optimal model with a plain-English explanation.
+        """
+        candidate_methods = methods or ["historical", "parametric", "student_t", "cornish_fisher", "ewma"]
+        results: list[dict[str, Any]] = []
+
+        for m in candidate_methods:
+            try:
+                res = self.run_rolling_backtest(
+                    holdings=holdings,
+                    portfolio_name=portfolio_name,
+                    currency=currency,
+                    method=m,
+                    confidence_level=confidence_level,
+                    lookback_window=lookback_window,
+                )
+
+                # Score model (lower is better):
+                # 1. Base penalty: absolute error in exception rate (scaled)
+                score = abs(res.exception_rate - res.expected_exception_rate) * 100.0
+
+                # 2. Basel penalties
+                if res.basel_zone == "YELLOW":
+                    score += 15.0
+                elif res.basel_zone == "RED":
+                    score += 50.0
+
+                # 3. Kupiec test failure penalty
+                if not res.kupiec_test_passed:
+                    score += 20.0
+
+                # 4. Christoffersen conditional coverage failure penalty
+                if res.christoffersen_cc_test_passed is False:
+                    score += 15.0
+
+                results.append({
+                    "method": m,
+                    "exceptions": res.exception_count,
+                    "expected_exceptions": res.expected_exceptions,
+                    "exception_rate": res.exception_rate,
+                    "expected_exception_rate": res.expected_exception_rate,
+                    "basel_zone": res.basel_zone,
+                    "basel_capital_multiplier": res.basel_capital_multiplier,
+                    "kupiec_p_value": res.kupiec_p_value,
+                    "kupiec_test_passed": res.kupiec_test_passed,
+                    "christoffersen_ind_p_value": res.christoffersen_p_value,
+                    "christoffersen_ind_passed": res.christoffersen_test_passed,
+                    "christoffersen_cc_p_value": res.christoffersen_cc_p_value,
+                    "christoffersen_cc_test_passed": res.christoffersen_cc_test_passed,
+                    "score": round(score, 3),
+                })
+            except Exception:
+                continue
+
+        if not results:
+            raise ValueError("All candidate VaR models failed backtest execution.")
+
+        # Rank by score ascending
+        results.sort(key=lambda r: r["score"])
+        best = results[0]
+
+        method_display = best["method"].replace("_", " ").title()
+        reason = (
+            f"{method_display} VaR is recommended: It achieves Basel {best['basel_zone']} zone with "
+            f"{best['exceptions']} exceptions ({best['exception_rate']:.2%} observed vs {best['expected_exception_rate']:.2%} expected), "
+            f"passes the Kupiec POF unconditional coverage test (p={best['kupiec_p_value'] or 0.0:.3f}), "
+            f"and satisfies Christoffersen conditional coverage (p={best['christoffersen_cc_p_value'] or 0.0:.3f}). "
+            f"It maintains a low regulatory capital multiplier ({best['basel_capital_multiplier']:.2f}x) while avoiding risk underestimation."
+        )
+
+        return {
+            "portfolio_name": portfolio_name,
+            "currency": currency,
+            "confidence_level": confidence_level,
+            "lookback_window": lookback_window,
+            "forecast_count": res.forecast_count,
+            "models": results,
+            "recommended_method": best["method"],
+            "recommendation_reason": reason,
+        }

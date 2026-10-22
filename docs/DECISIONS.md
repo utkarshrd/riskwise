@@ -155,4 +155,19 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Decision:** Expose `var_method` and `horizon_days` on `POST /market/portfolio/analyze`. Calculate chosen model VaR/ES, annualized Sharpe and Sortino ratios using jurisdiction-appropriate risk-free rate, top-5 peak-to-trough drawdown table, and component/marginal VaR decomposition. All methods verified against analytic closed-form formulas (Gaussian, Student-t, Cornish-Fisher, EWMA, Euler allocation).
 - **Consequences:** Gives institutional-grade risk attribution and multi-model flexibility while maintaining complete backward compatibility with existing API contracts.
 
+---
+
+## ADR-015: Regulatory VaR Backtesting, Christoffersen Conditional Coverage, and Model Comparison
+- **Date:** 2026-10-22 (Tier A Milestone)
+- **Status:** Accepted
+- **Context:** Regulatory compliance under BCBS standards requires a 250-day rolling backtest with the official traffic-light penalty matrix, unconditional coverage (Kupiec POF), first-order Markov independence (Christoffersen IND), and conditional coverage joint testing ($LR_{cc} = LR_{uc} + LR_{ind} \sim \chi^2(2)$). Additionally, backtest performance must be fast (vectorised) and provide institutional model ranking and plain-English recommendations.
+- **Decision:**
+  1. Vectorise the rolling backtest window using `numpy.lib.stride_tricks.sliding_window_view`.
+  2. Implement the official BCBS Basel 250-day traffic-light multiplier table (Green: $\le 4$ exceptions, $3.00\times$; Yellow: 5 to 9 exceptions, $3.40\times$ to $3.85\times$; Red: $\ge 10$ exceptions, $4.00\times$) with exact binomial CDF continuity fallback for non-250 windows.
+  3. Remove artificial `999.0` sentinels for 0 or 100% exceptions by computing exact asymptotic likelihood ratios.
+  4. Implement Christoffersen Conditional Coverage ($LR_{cc} \sim \chi^2(2)$).
+  5. Introduce `POST /api/v1/market/var/compare` side-by-side leaderboard running candidate models on the exact same window, ranking them by a composite risk score (penalising deviation from expected exceptions, Basel yellow/red zones, and test rejections), and returning a plain-English recommendation.
+  6. Optimize `/market/universe` with lightweight SQL aggregation (`func.count`, distinct facets) and sample capping to avoid hydrating thousands of ORM instances.
+- **Consequences:** Eliminates computational bottlenecks in backtesting, achieves full regulatory compliance, and provides actionable multi-model recommendations.
+
 
