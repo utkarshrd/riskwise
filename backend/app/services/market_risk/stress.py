@@ -16,7 +16,6 @@ from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
-
 from backend.app.core.config import settings
 from backend.app.services.market_risk.engine import CurrencyPolicy, Holding, MarketRiskEngine
 from backend.app.services.market_risk.risk import returns as _ret
@@ -111,7 +110,7 @@ class YahooWindowProvider:
                     progress=False,
                 )
                 break
-            except Exception as exc:  # network or provider failure: retry, then surface
+            except (OSError, ValueError, KeyError, TimeoutError, RuntimeError) as exc:  # network or provider failure: retry, then surface
                 last_exc = exc
                 time.sleep(self.backoff_factor**attempt)
         if raw is None:
@@ -362,7 +361,7 @@ class StressService:
             "uniform_asset_shock": round(-loss, 6),
             "uniform_contributions": uniform_rows,
             "benchmark_symbol": bench_sym,
-            "lookback_observations": int(len(aligned)),
+            "lookback_observations": len(aligned),
             "lookback_start": aligned.index[0].date().isoformat(),
             "lookback_end": aligned.index[-1].date().isoformat(),
             "portfolio_beta": round(portfolio_beta, 4),

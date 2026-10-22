@@ -9,17 +9,15 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import or_
-
 from backend.app.core.config import settings
 from backend.app.db.models import DailyPrice, Instrument
 from backend.app.db.session import SessionLocal
 from backend.app.services.market_risk.ticker_normalizer import (
     CORPORATE_ALIASES,
     SYMBOL_CATALOGUE,
-    get_symbol_currency,
     normalize_ticker,
 )
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,7 @@ class MarketDataService:
                         return df
             finally:
                 db.close()
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.debug("Database price lookup failed for %s: %s", canonical_symbol, e)
         return None
 
@@ -113,7 +111,7 @@ class MarketDataService:
                 db.commit()
             finally:
                 db.close()
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             logger.warning("Could not persist daily prices to DB for %s: %s", canonical_symbol, e)
         return saved_count
 
@@ -166,7 +164,7 @@ class MarketDataService:
                 raw_df = yf.download(provider_sym, period=period, auto_adjust=False, progress=False)
                 if raw_df is not None and not raw_df.empty:
                     break
-            except Exception as exc:
+            except (OSError, ValueError, KeyError, TimeoutError) as exc:
                 last_exc = exc
                 sleep_sec = backoff_factor**attempt
                 logger.info(
@@ -277,7 +275,7 @@ class MarketDataService:
                 inst_obj.updated_at = datetime.now(UTC)
                 db_inst.commit()
             db_inst.close()
-        except Exception as e:
+        except (OSError, ValueError) as e:
             logger.warning("Could not update Instrument freshness in DB for %s: %s", canonical_sym, e)
 
         # 4. Update market manifest with freshness and anomaly metrics
@@ -494,7 +492,7 @@ class MarketDataService:
                 {
                     "series_start": str(aligned.index[0].date()),
                     "series_end": str(aligned.index[-1].date()),
-                    "observations": int(len(aligned)),
+                    "observations": len(aligned),
                     "rate_start": round(float(rates.iloc[0]), 4),
                     "rate_end": round(float(rates.iloc[-1]), 4),
                 }
@@ -507,7 +505,6 @@ class MarketDataService:
         """Validates symbol availability and status."""
         norm = normalize_ticker(symbol, currency_hint=target_currency)
         can_sym = norm["canonical_symbol"]
-        prov_sym = norm["provider_symbol"]
         exchange = norm["exchange"]
         currency = norm["currency"]
         file_stem = norm["file_stem"]
@@ -551,7 +548,7 @@ class MarketDataService:
                     "end_date": str(df["Date"].max().date()),
                     "message": f"Symbol '{can_sym}' is verified and available offline ({len(df)} sessions).",
                 }
-            except Exception as e:
+            except (OSError, ValueError, KeyError) as e:
                 logger.warning("Snapshot read error during validation for %s: %s", can_sym, e)
 
         # Live probe
@@ -570,7 +567,7 @@ class MarketDataService:
                 "end_date": str(live_df["Date"].max().date()),
                 "message": f"Successfully validated and cached '{can_sym}' from market data provider.",
             }
-        except Exception as e:
+        except (OSError, ValueError, KeyError, TimeoutError, RuntimeError) as e:
             return {
                 "symbol": symbol,
                 "canonical_symbol": can_sym,
@@ -683,8 +680,8 @@ class MarketDataService:
                     idx_memberships = []
                     try:
                         idx_memberships = json.loads(inst.index_memberships_json or "[]")
-                    except Exception:
-                        pass
+                    except (json.JSONDecodeError, TypeError, ValueError) as err:
+                        logger.debug("Index membership JSON decode error for %s: %s", inst.symbol, err)
 
                     alias_note = None
                     if inst.symbol in CORPORATE_ALIASES:
@@ -726,17 +723,16 @@ class MarketDataService:
                             seen_symbols.add(target_sym)
 
                 for sym_key, meta in SYMBOL_CATALOGUE.items():
-                    if not q or q_upper in sym_key.upper() or q_upper in meta["name"].upper():
-                        if meta["symbol"] not in seen_symbols:
-                            results.append({
-                                "symbol": meta["symbol"],
-                                "name": meta["name"],
-                                "exchange": meta["exchange"],
-                                "currency": meta["currency"],
-                                "is_cached": (self.snapshots_dir / f"{meta['symbol']}.csv").exists(),
-                                "status": "known",
-                            })
-                            seen_symbols.add(meta["symbol"])
+                    if (not q or q_upper in sym_key.upper() or q_upper in meta["name"].upper()) and meta["symbol"] not in seen_symbols:
+                        results.append({
+                            "symbol": meta["symbol"],
+                            "name": meta["name"],
+                            "exchange": meta["exchange"],
+                            "currency": meta["currency"],
+                            "is_cached": (self.snapshots_dir / f"{meta['symbol']}.csv").exists(),
+                            "status": "known",
+                        })
+                        seen_symbols.add(meta["symbol"])
 
                 total_count = len(results)
                 results = results[:limit]
@@ -773,7 +769,7 @@ class MarketDataService:
             try:
                 self.fetch_live_price_history(s, period="2y")
                 return (s, True, None)
-            except Exception as e:
+            except (OSError, ValueError, KeyError, TimeoutError, RuntimeError) as e:
                 return (s, False, str(e))
 
         with ThreadPoolExecutor(max_workers=4) as executor:

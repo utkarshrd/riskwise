@@ -1,19 +1,19 @@
+import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
-from scipy import stats
+from backend.app.services.market_risk.risk import attribution as _attr
+from backend.app.services.market_risk.risk import returns as _ret
 
 # Phase 2 risk engine (canonical implementation)
 from backend.app.services.market_risk.risk import var_models as _vm
-from backend.app.services.market_risk.risk import returns as _ret
-from backend.app.services.market_risk.risk import attribution as _attr
-
-
+from pydantic import BaseModel
 
 FX_MODES = ("strict", "convert_to_base")
 SUPPORTED_FX_CURRENCIES = ("USD", "INR")
@@ -300,7 +300,7 @@ class MarketRiskEngine:
         valid_methods = {"historical", "gaussian", "student_t", "cornish_fisher", "ewma", "monte_carlo", "garch", "fhs"}
         method_norm = (var_method or "historical").lower().strip()
         if method_norm not in valid_methods:
-            raise ValueError(f"Unknown VaR method '{var_method}'. Supported methods: {sorted(list(valid_methods))}")
+            raise ValueError(f"Unknown VaR method '{var_method}'. Supported methods: {sorted(valid_methods)}")
         if horizon_days < 1 or horizon_days > 30:
             raise ValueError("horizon_days must be between 1 and 30.")
 
@@ -360,11 +360,9 @@ class MarketRiskEngine:
 
         # Portfolio daily return series
         portfolio_returns = returns_df[symbols].dot(weights)
-        portfolio_losses = -portfolio_returns  # Loss convention: loss is positive
 
         # 1. Volatility (Annualized using 252 trading day convention)
         port_returns_series = pd.Series(portfolio_returns.values, index=returns_df.index)
-        daily_std = float(portfolio_returns.std(ddof=1))
         annualized_vol = _ret.annualized_volatility(port_returns_series)
 
         # 2. Historical VaR / ES
@@ -415,7 +413,8 @@ class MarketRiskEngine:
             attr_res = _attr.compute_attribution(returns_df, symbols, weights, confidence=0.95)
             comp_var_pct = {k: round(v, 4) for k, v in attr_res.component_var_pct.items()}
             marg_var = {k: round(v, 4) for k, v in attr_res.marginal_var.items()}
-        except Exception:
+        except (ValueError, KeyError, ZeroDivisionError, FloatingPointError, RuntimeError) as exc:
+            logger.warning("Risk attribution computation failed: %s", exc)
             comp_var_pct = None
             marg_var = None
 
@@ -439,8 +438,8 @@ class MarketRiskEngine:
                 beta_to_bench = round(float(computed_b), 4) if not math.isnan(computed_b) else None
                 computed_c = float(aligned_port.corr(aligned_bench))
                 corr_to_bench = round(computed_c, 4) if not math.isnan(computed_c) else None
-        except Exception:
-            pass
+        except (ValueError, KeyError, ZeroDivisionError, FloatingPointError, RuntimeError, OSError) as exc:
+            logger.warning("Benchmark beta computation failed: %s", exc)
 
         chart_series = self._build_chart_series(
             port_returns_series, aligned_bench_ret, log_returns=(return_method == "log")

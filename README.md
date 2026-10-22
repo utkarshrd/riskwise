@@ -1,5 +1,7 @@
 # RiskWise — Multi-Domain Financial Risk Intelligence Platform
 
+[![CI](https://github.com/utkarshrd/riskwise/actions/workflows/ci.yml/badge.svg)](https://github.com/utkarshrd/riskwise/actions/workflows/ci.yml)
+
 RiskWise is an explainable, agentic financial risk intelligence platform combining borrower credit-risk analysis, personal financial stress testing, portfolio market-risk measurement (8 VaR/ES models), rolling Value-at-Risk model validation (Kupiec + Christoffersen), and source-grounded educational guidance.
 
 Built as a modular monolith adhering to PRD v3.0 specifications. **Tier A upgrade complete:** 2,617 NSE/BSE/US instruments in live instrument master, multi-model risk analytics, Basel BCBS traffic-light backtesting, and interactive Recharts data visualisation.

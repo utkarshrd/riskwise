@@ -1,12 +1,11 @@
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.app.api.v1.market import get_portfolio_import_service
 from backend.app.main import app
 from backend.app.services.market_risk.portfolio_import import (
     PortfolioImportService,
     parse_number,
 )
+from fastapi.testclient import TestClient
 
 
 class FakePriceProvider:

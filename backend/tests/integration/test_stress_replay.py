@@ -7,7 +7,7 @@ import pytest
 from backend.app.api.v1.market import get_stress_service
 from backend.app.main import app
 from backend.app.services.market_risk.engine import Holding
-from backend.app.services.market_risk.stress import SCENARIO_WINDOWS, FX_SYMBOL, StressService
+from backend.app.services.market_risk.stress import FX_SYMBOL, SCENARIO_WINDOWS, StressService
 from fastapi.testclient import TestClient
 
 client = TestClient(app)

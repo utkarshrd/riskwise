@@ -1,8 +1,11 @@
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 from backend.app.core.config import settings
 from backend.app.db.models import Instrument, MarketRiskRun, VaRValidationRun
 from backend.app.db.session import get_db
@@ -107,8 +110,8 @@ def get_market_universe(limit: int = 100, db: Session = Depends(get_db)):
                 try:
                     for idx in json.loads(r[0]):
                         indices.add(idx)
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, TypeError, ValueError) as err:
+                    logger.debug("Failed parsing index membership JSON: %s", err)
 
         # If sample needed up to limit, pull lightweight columns (symbol, currency)
         if len(symbols) < limit:
@@ -122,8 +125,8 @@ def get_market_universe(limit: int = 100, db: Session = Depends(get_db)):
                 if sym not in symbols:
                     symbols.append(sym)
                     symbol_currencies[sym] = curr or "INR"
-    except Exception:
-        pass
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        logger.warning("Error querying instrument facets: %s", exc)
 
     metadata = {
         "provider": "offline_snapshot_with_live_fallback",
@@ -133,9 +136,9 @@ def get_market_universe(limit: int = 100, db: Session = Depends(get_db)):
         "supported_symbols": sorted(symbols),
         "symbol_currencies": symbol_currencies,
         "total_instruments": total_instruments,
-        "sectors": sorted(list(sectors)),
-        "cap_buckets": sorted(list(cap_buckets)),
-        "indices": sorted(list(indices)),
+        "sectors": sorted(sectors),
+        "cap_buckets": sorted(cap_buckets),
+        "indices": sorted(indices),
         "manifest_present": manifest_file.exists(),
     }
     return metadata

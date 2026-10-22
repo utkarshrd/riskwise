@@ -22,18 +22,22 @@ Validates Task A3:
 """
 
 import math
+
 import numpy as np
 import pandas as pd
 import pytest
-from scipy import stats
-from fastapi.testclient import TestClient
-
 from backend.app.main import app
 from backend.app.services.market_risk.risk import (
-    returns as ret_mod,
-    var_models as vm,
     attribution as attr_mod,
 )
+from backend.app.services.market_risk.risk import (
+    returns as ret_mod,
+)
+from backend.app.services.market_risk.risk import (
+    var_models as vm,
+)
+from fastapi.testclient import TestClient
+from scipy import stats
 
 client = TestClient(app)
 

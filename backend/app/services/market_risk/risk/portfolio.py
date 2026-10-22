@@ -20,8 +20,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.optimize import minimize, OptimizeResult
-
+from scipy.optimize import OptimizeResult, minimize
 
 ANNUALISATION = 252
 DEFAULT_RISK_FREE = 0.06   # 6% p.a., documented default

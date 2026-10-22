@@ -8,7 +8,6 @@ artifacts/evaluation/model_comparison.json and contain zero deprecated UCI refer
 
 import json
 from pathlib import Path
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 EVAL_FILE = REPO_ROOT / "artifacts" / "evaluation" / "model_comparison.json"

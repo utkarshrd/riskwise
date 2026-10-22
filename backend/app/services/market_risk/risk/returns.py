@@ -12,13 +12,12 @@ Conventions:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-
 
 # ---------------------------------------------------------------------------
 # Default risk-free rates (documented assumption)

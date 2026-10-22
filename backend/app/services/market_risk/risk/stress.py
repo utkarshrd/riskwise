@@ -16,13 +16,11 @@ See docs/MARKET_RISK_METHODS.md for methodology and data sources.
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
 
 # ---------------------------------------------------------------------------
 # Date ranges for named historical events
@@ -445,7 +443,7 @@ def correlation_breakdown_scenario(
 
     # Undiversified loss as a "shock" per asset (proportional to weight × vol)
     shocks = {sym: -z95 * float(sigs[i]) for i, sym in enumerate(symbols)}
-    loss_pct, contribs = _apply_shocks(weights, shocks, portfolio_value)
+    _loss_pct, contribs = _apply_shocks(weights, shocks, portfolio_value)
 
     return StressResult(
         scenario_name=f"CorrelationBreakdown_rho{correlation_assumption:.0f}",

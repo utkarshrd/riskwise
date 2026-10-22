@@ -10,15 +10,15 @@ Validates Task A2:
 - Test with real call if network allows
 """
 
-from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
 import pytest
-from backend.app.services.market_risk.market_data_service import MarketDataService
+from backend.app.db.models import DailyPrice
 from backend.app.db.session import SessionLocal
-from backend.app.db.models import DailyPrice, Instrument
+from backend.app.services.market_risk.market_data_service import MarketDataService
 
 
 class TestLazyPriceLoadingMocked:
@@ -79,9 +79,8 @@ class TestLazyPriceLoadingMocked:
         )
 
         svc = MarketDataService(snapshots_dir=tmp_path)
-        with patch("yfinance.download", return_value=mock_raw):
-            with pytest.raises(ValueError, match="Excessive price gap detected"):
-                svc.fetch_live_price_history("GAP_SYM.NS")
+        with patch("yfinance.download", return_value=mock_raw), pytest.raises(ValueError, match="Excessive price gap detected"):
+            svc.fetch_live_price_history("GAP_SYM.NS")
 
     def test_mocked_lazy_load_rejects_non_positive_prices(self, tmp_path: Path):
         """Verify validation rejects series with zero or negative prices."""
@@ -97,9 +96,8 @@ class TestLazyPriceLoadingMocked:
         )
 
         svc = MarketDataService(snapshots_dir=tmp_path)
-        with patch("yfinance.download", return_value=mock_raw):
-            with pytest.raises(ValueError, match="invalid or non-positive price values"):
-                svc.fetch_live_price_history("NEG_SYM.NS")
+        with patch("yfinance.download", return_value=mock_raw), pytest.raises(ValueError, match="invalid or non-positive price values"):
+            svc.fetch_live_price_history("NEG_SYM.NS")
 
     def test_mocked_lazy_load_retry_backoff(self, tmp_path: Path):
         """Verify retry and exponential backoff on transient network failures."""
@@ -142,6 +140,6 @@ class TestLazyPriceLoadingRealNetwork:
             assert (clean_df["adj_close"] > 0).all()
             # Verify cached file was written
             assert (tmp_path / "ITC.NS.csv").exists()
-        except Exception as exc:
+        except (OSError, ValueError, KeyError, TimeoutError, RuntimeError) as exc:
             # If network or provider rate limit occurs, record reason
             pytest.skip(f"Live network call to yfinance failed: {exc}")

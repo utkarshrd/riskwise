@@ -10,18 +10,26 @@ Covers:
   - portfolio: min-var, risk-parity, max-Sharpe, efficient frontier, what-if
 """
 import math
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 import pytest
-
 from backend.app.services.market_risk.risk import (
-    returns as ret_mod,
-    var_models as vm,
     attribution as attr_mod,
-    stress as st,
+)
+from backend.app.services.market_risk.risk import (
     portfolio as pf,
 )
-
+from backend.app.services.market_risk.risk import (
+    returns as ret_mod,
+)
+from backend.app.services.market_risk.risk import (
+    stress as st,
+)
+from backend.app.services.market_risk.risk import (
+    var_models as vm,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -59,7 +67,7 @@ def portfolio_losses(deterministic_returns, equal_weights):
 # ---------------------------------------------------------------------------
 
 class TestVaRModels:
-    METHODS = ["historical", "gaussian", "student_t", "cornish_fisher", "ewma", "fhs"]
+    METHODS: ClassVar[list[str]] = ["historical", "gaussian", "student_t", "cornish_fisher", "ewma", "fhs"]
 
     def test_all_methods_return_positive_var(self, portfolio_losses):
         """VaR at 95% should be positive for a roughly-zero-mean loss series."""
@@ -286,7 +294,7 @@ class TestStress:
         # All shocks derived from data, not hardcoded
         for r in results:
             for shock in r.asset_shocks.values():
-                assert shock != 0.0 or True  # just checking no crash
+                assert isinstance(shock, float)
 
     def test_event_replay_missing_data_warns(self, prices_df, weights_dict):
         """Event replay for COVID 2020 warns when snapshot doesn't cover that date."""

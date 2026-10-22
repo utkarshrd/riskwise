@@ -6,13 +6,12 @@ Task A4 tests - VaR Validation (enhanced)
 - POST /api/v1/market/var/compare smoke test via TestClient
 - Edge cases: 0 exceptions, all exceptions, clustered exceptions
 """
-import math
 
-import pytest
-from scipy import stats
+from typing import ClassVar
 
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine
 from backend.app.services.var_validation.engine import VaRValidationEngine
+from scipy import stats
 
 
 def _make_engine(tmp_path, seed=42, n=600):
@@ -95,7 +94,7 @@ class TestChristoffersenCC:
 
 
 class TestBaselCapitalMultiplier:
-    OFFICIAL_TABLE = {
+    OFFICIAL_TABLE: ClassVar[dict[int, tuple[str, float]]] = {
         0: ("GREEN", 3.00),
         1: ("GREEN", 3.00),
         2: ("GREEN", 3.00),

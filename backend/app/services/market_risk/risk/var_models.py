@@ -24,9 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-import pandas as pd
 from scipy import stats
-
 
 # ---------------------------------------------------------------------------
 # Output schema
@@ -132,7 +130,7 @@ def _student_t(losses: np.ndarray, confidence: float) -> tuple[float, float, lis
         if df_fit <= 1:
             warns.append(f"Fitted Student-t df={df_fit:.2f} ≤ 1; ES undefined. Falling back to VaR.")
             es = var
-    except Exception as exc:
+    except (RuntimeError, ValueError, TypeError, FloatingPointError) as exc:
         warns.append(f"Student-t fitting failed ({exc}); falling back to Gaussian.")
         return _gaussian(losses, confidence)
     return var, es, warns
@@ -204,7 +202,7 @@ def _garch(losses: np.ndarray, confidence: float) -> tuple[float, float, list[st
     except ImportError:
         warns.append("arch library not installed; falling back to EWMA.")
         return _ewma(losses, confidence)
-    except Exception as exc:
+    except (RuntimeError, ValueError, TypeError, FloatingPointError) as exc:
         warns.append(f"GARCH fitting failed ({exc}); falling back to EWMA.")
         return _ewma(losses, confidence)
     return var, es, warns
@@ -420,7 +418,7 @@ def estimate_all(
                         bootstrap=bootstrap, mc_seed=mc_seed,
                     )
                     results.append(res)
-                except Exception as exc:
+                except (ValueError, TypeError, RuntimeError, FloatingPointError) as exc:
                     results.append(VaRResult(
                         method=method, confidence=conf, horizon_days=h,
                         var=float("nan"), es=float("nan"),

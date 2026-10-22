@@ -1,17 +1,18 @@
+import logging
 import math
 from typing import Any
-import numpy as np
-import pandas as pd
-from numpy.lib.stride_tricks import sliding_window_view
-from pydantic import BaseModel
-from scipy import stats
 
+logger = logging.getLogger(__name__)
+
+import numpy as np
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine
 from backend.app.services.market_risk.risk import var_models as _vm
 from backend.app.services.market_risk.ticker_normalizer import (
-    get_symbol_currency,
     normalize_ticker,
 )
+from numpy.lib.stride_tricks import sliding_window_view
+from pydantic import BaseModel
+from scipy import stats
 
 
 class VaRValidationPoint(BaseModel):
@@ -354,7 +355,8 @@ class VaRValidationEngine:
                     "christoffersen_cc_test_passed": res.christoffersen_cc_test_passed,
                     "score": round(score, 3),
                 })
-            except Exception:
+            except (ValueError, KeyError, TypeError, FloatingPointError, RuntimeError) as exc:
+                logger.warning("Backtest comparison failed for method %s: %s", m, exc)
                 continue
 
         if not results:

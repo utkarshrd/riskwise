@@ -1,13 +1,9 @@
 import csv
-import io
-import json
 import logging
 import math
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
-
-from sqlalchemy.orm import Session
 
 from backend.app.db.models import Instrument
 from backend.app.db.session import SessionLocal
@@ -23,6 +19,7 @@ from backend.app.services.market_risk.ticker_normalizer import (
     SYMBOL_CATALOGUE,
     get_symbol_currency,
 )
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +189,7 @@ class PortfolioImportService:
         try:
             sniffer = csv.Sniffer()
             delimiter = sniffer.sniff(sample_text, delimiters=",\t;").delimiter
-        except Exception:
+        except (csv.Error, ValueError, TypeError):
             # Fallback heuristic
             comma_count = sample_text.count(",")
             semicolon_count = sample_text.count(";")
@@ -375,7 +372,7 @@ class PortfolioImportService:
         norm_query_name = normalize_company_name(raw_sym)
         if norm_query_name:
             # Check catalogue names
-            for cat_sym, cat_meta in SYMBOL_CATALOGUE.items():
+            for cat_meta in SYMBOL_CATALOGUE.values():
                 if normalize_company_name(cat_meta.get("name", "")) == norm_query_name:
                     return {
                         "symbol": cat_meta["symbol"],
@@ -407,7 +404,8 @@ class PortfolioImportService:
             if isinstance(search_res, tuple):
                 search_res = search_res[0]
             suggestions = [{"symbol": s["symbol"], "name": s.get("name", s["symbol"])} for s in search_res[:3]]
-        except Exception:
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            logger.debug("Search suggestions failed for %s: %s", raw_sym, exc)
             suggestions = []
 
         return None, suggestions
@@ -427,7 +425,7 @@ class PortfolioImportService:
 
         delimiter, indexed_lines = self._detect_delimiter_and_split(csv_text)
 
-        header_orig_num, header_idx, header_mapping, col_indices = self._find_header(indexed_lines, delimiter)
+        _header_orig_num, header_idx, header_mapping, col_indices = self._find_header(indexed_lines, delimiter)
 
         data_lines = indexed_lines[header_idx + 1 :]
         if not data_lines:
@@ -586,7 +584,7 @@ class PortfolioImportService:
                     sym = future_to_sym[future]
                     try:
                         price_map[sym] = future.result()
-                    except Exception as exc:
+                    except (ValueError, KeyError, TypeError, OSError, RuntimeError) as exc:
                         price_errors[sym] = str(exc)
 
         # Filter out rows whose price fetch failed
