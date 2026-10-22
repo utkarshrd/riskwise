@@ -1,198 +1,198 @@
-import Link from "next/link";
-import { 
-  CreditCard, 
-  Activity, 
-  TrendingUp, 
-  CheckCircle2, 
-  Bot, 
-  Server, 
-  AlertTriangle,
-  ArrowRight,
-  Database,
-  Info
-} from "lucide-react";
+"use client";
 
-const modules = [
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  CreditCard,
+  Server,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
+import { Alert, Badge, Card, Skeleton, type Tone } from "@/components/ui";
+import { api, type SystemStatus } from "@/lib/api";
+
+interface ModuleCard {
+  title: string;
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  source: string;
+  cta: string;
+  /** Live status chip derived from the system status endpoint; null while it is unavailable. */
+  status: (s: SystemStatus) => { label: string; tone: Tone };
+}
+
+const MODULES: ModuleCard[] = [
   {
-    id: "M1-M2",
     title: "Credit Risk Intelligence & SHAP",
-    description: "Multi-model credit default classifier, local & global SHAP explainability, and constrained what-if counterfactual exploration.",
+    description:
+      "Four-tier credit risk classification for Indian borrowers with SHAP explanations and a what-if lab. The bureau Credit Score is deliberately not an input.",
     href: "/credit",
     icon: CreditCard,
-    status: "Pending M1 Training",
-    statusColor: "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
-    provenance: "Indian Banking & CIBIL Bureau Dataset",
-    actionText: "Configure Data Pipeline",
+    source: "Indian banking and CIBIL bureau dataset (51,336 records)",
+    cta: "Score a borrower profile",
+    status: (s) =>
+      s.credit_model_loaded
+        ? { label: `Model ${s.active_model_version ?? "loaded"}`, tone: "green" }
+        : { label: "Model not loaded", tone: "red" },
   },
   {
-    id: "M3",
     title: "Personal Financial Stress & Affordability",
-    description: "Deterministic loan EMI schedules, EMI-to-income ratio analysis, emergency cash-flow runway, and adverse shock scenarios.",
+    description: "EMI schedules, EMI-to-income ratio, emergency runway and adverse income or expense shocks, all from closed-form formulas.",
     href: "/stress",
     icon: Activity,
-    status: "Pending M3 Engine",
-    statusColor: "text-slate-600 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-    provenance: "Deterministic mathematical formulas",
-    actionText: "View Calculation Models",
+    source: "Deterministic formulas, no model involved",
+    cta: "Stress-test a household budget",
+    status: () => ({ label: "Deterministic", tone: "indigo" }),
   },
   {
-    id: "M4",
     title: "Portfolio Market Risk Lab",
-    description: "Historical and Parametric Value-at-Risk (VaR), Expected Shortfall (CVaR), peak-to-trough drawdowns, and historical market stress testing.",
+    description:
+      "VaR by eight methods, expected shortfall, drawdown, correlation, named historical stress replays, reverse stress and CSV import for NSE and US portfolios.",
     href: "/market-risk",
     icon: TrendingUp,
-    status: "Pending M4 Snapshot",
-    statusColor: "text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800",
-    provenance: "Local daily price snapshots (data/market_snapshots/)",
-    actionText: "Inspect Market Universe",
+    source: "Local price snapshots, with live Yahoo Finance fetches for new symbols",
+    cta: "Analyse a portfolio",
+    status: (s) =>
+      s.market_snapshot_loaded
+        ? { label: `${s.market_tickers_available.length} symbols cached`, tone: "green" }
+        : { label: "No snapshots", tone: "amber" },
   },
   {
-    id: "M5",
     title: "Rolling VaR Model Validation",
-    description: "Rolling out-of-sample backtesting against subsequent realized portfolio losses. Strict temporal separation with zero look-ahead bias.",
+    description: "Out-of-sample backtests with the Kupiec and Christoffersen tests and the Basel traffic light, plus a side-by-side model comparison.",
     href: "/var-validation",
     icon: CheckCircle2,
-    status: "Pending M5 Protocol",
-    statusColor: "text-slate-600 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-    provenance: "Trailing lookback window evaluation",
-    actionText: "Review Validation Method",
+    source: "Trailing-window forecasts, no look-ahead",
+    cta: "Backtest a VaR model",
+    status: () => ({ label: "Deterministic", tone: "indigo" }),
   },
   {
-    id: "M6",
-    title: "Agentic Risk Copilot",
-    description: "Bounded LangGraph workflow orchestrating verified domain calculation tools and source-grounded RAG retrieval with citations.",
+    title: "Risk Copilot",
+    description:
+      "Ask in plain language. The copilot calls the same calculation tools, shows its tool trace and removes any number that no tool or source produced.",
     href: "/copilot",
     icon: Bot,
-    status: "Pending M6 Graph",
-    statusColor: "text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800",
-    provenance: "Curated knowledge corpus (knowledge/manifest.csv)",
-    actionText: "Test Offline Copilot",
+    source: "Curated knowledge corpus with citations",
+    cta: "Ask a question",
+    status: (s) => ({ label: `${s.vector_index_chunk_count ?? 0} knowledge chunks`, tone: s.rag_corpus_loaded ? "green" : "amber" }),
   },
   {
-    id: "M7",
-    title: "ML Monitoring & Model Registry",
-    description: "Model artifact lineage, evaluation metadata comparison, Population Stability Index (PSI) drift tracking, and gated challenger promotions.",
+    title: "Model Registry & Drift",
+    description: "Registered model versions, evaluation metadata and population-stability drift checks.",
     href: "/model-health",
     icon: Server,
-    status: "Pending M7 Registry",
-    statusColor: "text-slate-600 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800",
-    provenance: "SQLite registry & immutable artifact storage",
-    actionText: "Inspect Registry",
+    source: "SQLite registry and stored evaluation artifacts",
+    cta: "Inspect the registry",
+    status: (s) => ({ label: s.active_model_version ? `Active ${s.active_model_version}` : "No active model", tone: s.active_model_version ? "green" : "amber" }),
   },
 ];
 
 export default function OverviewPage() {
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.system
+      .status()
+      .then((s) => !cancelled && setStatus(s))
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Could not reach the API."))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Header section */}
+    <div className="space-y-8 max-w-7xl mx-auto pb-12">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          RiskWise Intelligence Dashboard
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Milestone 0 Architectural Wireframe & Verification Baseline
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">RiskWise Intelligence Dashboard</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
+          Credit risk, personal finance and market risk analytics. Every figure comes from a deterministic calculation or a named dataset, never from a placeholder.
         </p>
       </div>
 
-      {/* Provenance & Offline Disclosures Banner */}
-      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1">
-            <p className="font-semibold text-amber-900 dark:text-amber-200">
-              Zero-Budget / Offline-First Compliance Notice
-            </p>
-            <p className="text-amber-800 dark:text-amber-300 leading-relaxed">
-              All metrics are computed exclusively from local data snapshots and deterministic formulas. No paid APIs, cloud data warehouses, or external LLM credentials are required for platform operation.
-            </p>
-          </div>
-        </div>
-        <Link
-          href="/methodology"
-          className="shrink-0 text-xs font-medium text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/60 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 dark:border-amber-700 transition"
-        >
-          View Methodology Disclosures
-        </Link>
-      </div>
+      {error && (
+        <Alert tone="warning" title="The API is not reachable">
+          {error} The module links below still work once the backend is running.
+        </Alert>
+      )}
 
-      {/* System Baseline Status Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium mb-1">
-            <Info className="w-4 h-4 text-indigo-500" />
-            <span>Architecture Style</span>
-          </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Modular Monolith</div>
-          <div className="text-xs text-slate-500 mt-1">FastAPI + Next.js App Router</div>
-        </div>
+      <section aria-label="Platform status" className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {loading ? (
+          [0, 1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+        ) : status ? (
+          <>
+            <Card>
+              <div className="text-[11px] text-slate-500">Platform</div>
+              <div className="text-lg font-bold capitalize text-slate-900 dark:text-slate-100">{status.status}</div>
+              <div className="text-[11px] text-slate-400">Database revision {status.migration_revision ?? "unknown"}</div>
+            </Card>
+            <Card>
+              <div className="text-[11px] text-slate-500">Market data</div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{status.market_tickers_available.length} symbols cached</div>
+              <div className="text-[11px] text-slate-400">
+                Snapshot checksums {status.snapshot_checksum_verified ? "verified" : "not verified"}
+              </div>
+            </Card>
+            <Card>
+              <div className="text-[11px] text-slate-500">Language model</div>
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{status.llm_provider_configured ? "Configured" : "Not used"}</div>
+              <div className="text-[11px] text-slate-400">Replies are composed from tool results either way</div>
+            </Card>
+          </>
+        ) : null}
+      </section>
 
-        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium mb-1">
-            <Database className="w-4 h-4 text-emerald-500" />
-            <span>Active Milestone</span>
-          </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Milestone 0 (Setup)</div>
-          <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">Foundations Complete</div>
-        </div>
-
-        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs font-medium mb-1">
-            <Server className="w-4 h-4 text-blue-500" />
-            <span>Anti-Fabrication Guard</span>
-          </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Strict Enforcement</div>
-          <div className="text-xs text-slate-500 mt-1">Zero placeholder/mock chart data</div>
-        </div>
-      </div>
-
-      {/* Modules Wireframe Grid */}
-      <div>
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">
-          Core Domain Modules
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {modules.map((mod) => {
-            const Icon = mod.icon;
+      <section aria-label="Modules" className="space-y-4">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Modules</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {MODULES.map((m) => {
+            const Icon = m.icon;
+            const chip = status ? m.status(status) : null;
             return (
-              <div
-                key={mod.id}
-                className="flex flex-col justify-between p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 transition"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${mod.statusColor}`}>
-                      {mod.status}
-                    </span>
+              <Card key={m.href} className="flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    <Icon className="w-5 h-5" />
                   </div>
-
-                  <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100 mb-1">
-                    {mod.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
-                    {mod.description}
-                  </p>
+                  {chip && <Badge tone={chip.tone}>{chip.label}</Badge>}
                 </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <div className="text-[11px] text-slate-400 mb-3 truncate">
-                    <span className="font-medium text-slate-500 dark:text-slate-300">Source:</span> {mod.provenance}
-                  </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.title}</h3>
+                  <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">{m.description}</p>
+                </div>
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <p className="text-[11px] text-slate-400">
+                    <span className="font-semibold text-slate-500">Source:</span> {m.source}
+                  </p>
                   <Link
-                    href={mod.href}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                    href={m.href}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
-                    <span>{mod.actionText}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    {m.cta} <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
-              </div>
+              </Card>
             );
           })}
         </div>
-      </div>
+      </section>
+
+      <Alert tone="info" title="How to read the results">
+        These tools are educational. Value at Risk describes a loss threshold, not a worst case; credit tiers are relative risk within the training dataset, not a bureau score;
+        and nothing here is investment advice.{" "}
+        <Link href="/methodology" className="font-semibold underline">
+          Read the methodology and limitations
+        </Link>
+        .
+      </Alert>
     </div>
   );
 }

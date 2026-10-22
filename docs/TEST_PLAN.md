@@ -30,14 +30,16 @@ Verify end-to-end correctness, mathematical validity, leakage prevention, and of
 - Intent routing verification: calculation questions invoke domain tools, educational questions route to RAG corpus, unsupported questions trigger safe rejection.
 - Fallback verification: agent operates gracefully without external LLM keys.
 
-### 2.5 Frontend Verification (`frontend/tests/`)
-- Dashboard component rendering, navigation, empty states, error states, and offline status indicators.
+### 2.5 Frontend Verification
+- There is **no automated component or end-to-end test suite** for the frontend (a Playwright suite is out of scope). The frontend is verified by ESLint, the TypeScript type-check, a production build, and manual browser checks of every page in light and dark themes at desktop width, with screenshots kept under `docs/screenshots/`.
+- Logic that matters for correctness is kept on the server and covered by the backend tests (for example the chart series, FX conversion, stress replays and the copilot's number provenance guard).
 
 ---
 
 ## 3. Execution Commands
 
-- **Backend Tests:** `pytest backend/tests -v`
+- **Backend setup in a fresh clone:** `python scripts/build_instrument_master.py` (creates the schema and loads the instrument master from `data/reference/EQUITY_L.csv`) and `python scripts/build_index.py` (RAG index from the tracked knowledge corpus).
+- **Backend Tests:** `pytest backend/tests -v`. Tests are offline: network access is blocked by `conftest.py`. Tests marked `requires_trained_model` skip, with a stated reason, when `artifacts/models/credit_indian_xgboost_v1.joblib` is absent (the model files are gitignored; `scripts/train_indian_credit.py` creates them).
 - **Backend Linting:** `ruff check backend`
-- **Backend Type Checks:** `mypy backend` (or Ruff type checker)
-- **Frontend Build & Test:** `npm run build` and `npm test` inside `frontend/`
+- **Frontend:** `npm run lint`, `npx tsc --noEmit` and `npm run build` inside `frontend/` (there is no `npm test`).
+- **CI:** `.github/workflows/ci.yml` runs the steps above. Each step has been run from a clean checkout locally; the workflow itself has not yet run on GitHub.

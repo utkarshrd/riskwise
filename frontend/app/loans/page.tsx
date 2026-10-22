@@ -53,7 +53,7 @@ export default function LoanAffordabilityPage() {
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">
           <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800">
-            Milestone 3 · Reducing-Balance EMI Engine
+            Reducing-balance EMI engine
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">

@@ -59,6 +59,10 @@ export interface SystemStatus {
   market_snapshot_loaded: boolean;
   market_tickers_available: string[];
   rag_corpus_loaded: boolean;
+  migration_revision?: string | null;
+  snapshot_checksum_verified?: boolean;
+  vector_index_chunk_count?: number;
+  llm_provider_configured?: boolean;
 }
 
 export interface CreditModelMetadata {
@@ -515,6 +519,8 @@ export interface DriftRunResponse {
   current_batch_id: string;
   overall_psi: number;
   overall_status: string;
+  /** What the two batches are; today both come from the training data, so this is a pipeline check. */
+  drift_source?: string;
   features: Array<{
     feature_name: string;
     psi_value: number;

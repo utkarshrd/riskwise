@@ -4,7 +4,15 @@
 
 RiskWise is an explainable, agentic financial risk intelligence platform combining borrower credit-risk analysis, personal financial stress testing, portfolio market-risk measurement (8 VaR/ES models), rolling Value-at-Risk model validation (Kupiec + Christoffersen), and source-grounded educational guidance.
 
-Built as a modular monolith adhering to PRD v3.0 specifications. **Tier A upgrade complete:** 2,617 NSE/BSE/US instruments in live instrument master, multi-model risk analytics, Basel BCBS traffic-light backtesting, and interactive Recharts data visualisation.
+Built as a modular monolith adhering to PRD v3.0 specifications.
+
+**What it does today**
+- 2,617 NSE and US instruments in the instrument master, with prices fetched and cached on first use.
+- Portfolio market risk by eight VaR methods, expected shortfall, drawdown, correlation and charts computed from the portfolio's actual returns.
+- Rolling VaR validation (Kupiec, Christoffersen, Basel traffic light) and a side-by-side model comparison.
+- Opt-in USD/INR conversion for mixed portfolios, named historical stress replays (COVID 2020, election day 2024, Adani 2023), reverse stress, and broker CSV import (Zerodha, Groww).
+- A copilot that calls the same tools and removes any number no tool produced.
+- Light and dark themes, and a methods reference that every metric tooltip links to.
 
 ---
 
@@ -64,7 +72,7 @@ For in-depth architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 | File | Purpose |
 |---|---|
-| [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) | Auto-generated FastAPI endpoint specifications (18 endpoints) |
+| [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) | Auto-generated FastAPI endpoint specifications (the 18 PRD endpoints plus the additions since) |
 | [docs/MARKET_RISK_METHODS.md](docs/MARKET_RISK_METHODS.md) | Formulas & references for all 8 VaR/ES models + backtest tests |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Architectural Decision Records (ADR-001 – ADR-015) |
 | [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) | Explicit methodology disclosures and system boundaries |
@@ -164,7 +172,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the RiskWise dashboa
 Run all quality checks before committing:
 
 ```powershell
-# Run full backend test suite (202 tests)
+# Run full backend test suite
 .\.venv\Scripts\pytest backend/tests -v
 
 # Run backend linter
@@ -174,7 +182,9 @@ Run all quality checks before committing:
 cd frontend; npm run build
 ```
 
-**Test baseline (as of 2026-10-22):** 202 passing, 0 failures, 34.2s.
+**Test baseline (2026-10-23):** with the trained credit model present, 298 passing and 0 failing. In a fresh clone (no `riskwise.db`, no trained model) 282 pass and 16 skip with a stated reason, because the model files are gitignored; run `scripts/train_indian_credit.py` to enable those. A fresh clone also needs `python scripts/build_instrument_master.py` and `python scripts/build_index.py` before the tests, as the CI workflow does.
+
+The CI workflow has not yet run on GitHub. Its frontend build step currently fails on its first run because the pinned Next.js version has a known critical advisory; see [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) section 12.
 
 ---
 

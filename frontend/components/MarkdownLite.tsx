@@ -28,6 +28,35 @@ function splitRow(line: string): string[] {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 }
 
+interface ListItem {
+  indent: number;
+  text: string;
+}
+
+/** Bullets nest by indentation: deeper lines that follow an item become its sub-list. */
+function buildList(items: ListItem[], key: string): ReactNode {
+  const base = items[0].indent;
+  const children: ReactNode[] = [];
+  let i = 0;
+  while (i < items.length) {
+    let j = i + 1;
+    while (j < items.length && items[j].indent > base) j++;
+    const nested = items.slice(i + 1, j);
+    children.push(
+      <li key={`${key}-${i}`}>
+        {inline(items[i].text, `${key}-${i}`)}
+        {nested.length > 0 && buildList(nested, `${key}-${i}n`)}
+      </li>,
+    );
+    i = j;
+  }
+  return (
+    <ul key={key} className="list-disc pl-5 space-y-1">
+      {children}
+    </ul>
+  );
+}
+
 export default function MarkdownLite({ source }: { source: string }) {
   const lines = source.split(/\r?\n/);
   const out: ReactNode[] = [];
@@ -81,13 +110,12 @@ export default function MarkdownLite({ source }: { source: string }) {
         </div>,
       );
     } else if (/^\s*[-*]\s/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) items.push(lines[i++].replace(/^\s*[-*]\s/, ""));
-      out.push(
-        <ul key={key} className="list-disc pl-5 space-y-1">
-          {items.map((t, j) => <li key={j}>{inline(t, `${key}l${j}`)}</li>)}
-        </ul>,
-      );
+      const items: ListItem[] = [];
+      while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) {
+        const m = lines[i++].match(/^(\s*)[-*]\s(.*)$/)!;
+        items.push({ indent: m[1].length, text: m[2] });
+      }
+      out.push(buildList(items, key));
     } else if (/^---+$/.test(line.trim())) {
       out.push(<hr key={key} className="border-slate-200 dark:border-slate-800" />);
       i++;

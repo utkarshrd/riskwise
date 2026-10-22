@@ -110,7 +110,7 @@ export default function StressTestPage() {
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
           <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800">
-            Milestone 3 · Deterministic Cash-Flow Engine
+            Deterministic cash-flow engine
           </span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
