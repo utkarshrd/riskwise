@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { api, type VaRValidationResponse } from "@/lib/api";
+import { api, type FxMode, type VaRValidationResponse } from "@/lib/api";
 
 export interface ValidationRequest {
   holdings: Array<{ symbol: string; weight?: number }>;
@@ -10,6 +10,7 @@ export interface ValidationRequest {
   method: string;
   confidence_level: number;
   lookback_window: number;
+  fx_mode: FxMode;
 }
 
 /** Runs one rolling VaR backtest and tracks its loading and error state. */

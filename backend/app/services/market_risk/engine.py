@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,18 @@ from scipy import stats
 from backend.app.services.market_risk.risk import var_models as _vm
 from backend.app.services.market_risk.risk import returns as _ret
 from backend.app.services.market_risk.risk import attribution as _attr
+
+
+
+FX_MODES = ("strict", "convert_to_base")
+SUPPORTED_FX_CURRENCIES = ("USD", "INR")
+
+
+@dataclass(frozen=True)
+class CurrencyPolicy:
+    mode: str
+    base: str
+    convert: bool
 
 
 class Holding(BaseModel):
@@ -65,6 +78,8 @@ class PortfolioRiskMetrics(BaseModel):
     beta_to_benchmark: float | None = None
     correlation_to_benchmark: float | None = None
     chart_series: dict[str, Any] | None = None
+    fx_converted: bool = False
+    fx: dict[str, Any] | None = None
 
 
 class StressScenario(BaseModel):
@@ -111,6 +126,54 @@ class MarketRiskEngine:
         """Determines asset currency from ticker normalizer or manifest."""
         return get_symbol_currency(symbol)
 
+    def resolve_currency_policy(self, symbols: list[str], currency: str | None, fx_mode: str = "strict") -> CurrencyPolicy:
+        """
+        Decides how currencies are handled for a portfolio.
+
+        strict (default): every asset must share one currency and it must equal the portfolio currency.
+        convert_to_base: assets in the other currency are converted into the portfolio (base) currency
+        with the historical USD/INR series. Only USD and INR are supported.
+        """
+        mode = (fx_mode or "strict").lower().strip()
+        if mode not in FX_MODES:
+            raise ValueError(f"fx_mode must be one of {list(FX_MODES)} (got '{fx_mode}').")
+
+        asset_currencies = {s: get_symbol_currency(s) for s in symbols}
+        distinct = set(asset_currencies.values())
+
+        if mode == "strict":
+            if len(distinct) > 1:
+                raise ValueError(
+                    f"Mixed-currency portfolio detected: {asset_currencies}. "
+                    "Portfolios are single-currency by default (all USD or all INR). "
+                    "Silent FX conversion is prohibited; set fx_mode='convert_to_base' to convert explicitly."
+                )
+            inferred = next(iter(distinct))
+            if currency and currency.upper() != inferred:
+                raise ValueError(
+                    f"Portfolio currency mismatch: specified currency is '{currency.upper()}', "
+                    f"but assets are denominated in '{inferred}' ({symbols})."
+                )
+            return CurrencyPolicy(mode="strict", base=inferred, convert=False)
+
+        if not currency or currency.upper() not in SUPPORTED_FX_CURRENCIES:
+            raise ValueError("fx_mode='convert_to_base' needs a base currency of 'USD' or 'INR'.")
+        unsupported = {s: c for s, c in asset_currencies.items() if c not in SUPPORTED_FX_CURRENCIES}
+        if unsupported:
+            raise ValueError(f"FX conversion only supports USD and INR assets; unsupported: {unsupported}.")
+        base = currency.upper()
+        return CurrencyPolicy(mode="convert_to_base", base=base, convert=distinct != {base})
+
+    def load_prices_with_policy(
+        self, symbols: list[str], policy: CurrencyPolicy, allow_live: bool = True
+    ) -> tuple[pd.DataFrame, str, dict[str, Any]]:
+        """Aligned prices in the policy's base currency, the data source mode, and the FX description."""
+        prices, source, _, fx_info = self.data_service.load_aligned_prices(
+            symbols, allow_live=allow_live, fx_conversion=policy.convert, base_currency=policy.base
+        )
+        fx = {"mode": policy.mode, "base_currency": policy.base, **fx_info}
+        return prices, source, fx
+
     def load_price_history(self, symbols: list[str], allow_live: bool = True) -> pd.DataFrame:
         """
         Loads aligned daily price history for requested symbols.
@@ -135,14 +198,19 @@ class MarketRiskEngine:
         else:
             raise ValueError(f"Unknown return calculation method '{method}'. Supported methods are 'simple' and 'log'.")
 
-    def derive_historical_stress_scenarios(self, symbols: list[str]) -> list[StressScenario]:
+    def derive_historical_stress_scenarios(
+        self, symbols: list[str], policy: CurrencyPolicy | None = None
+    ) -> list[StressScenario]:
         """
         Derives stress scenarios deterministically from the real snapshot observations:
         1. Historical_Worst_Single_Day: Minimum 1-day return observed per asset.
         2. Historical_Peak_to_Trough_Drawdown: Maximum cumulative drawdown observed per asset.
         Zero hidden constants or arbitrary numbers.
         """
-        prices = self.load_price_history(symbols)
+        if policy is not None:
+            prices, _, _ = self.load_prices_with_policy(symbols, policy)
+        else:
+            prices = self.load_price_history(symbols)
         simple_returns = self.calculate_returns(prices, method="simple")
 
         # 1. Worst single-day shock per asset
@@ -224,6 +292,7 @@ class MarketRiskEngine:
         var_method: str = "historical",
         horizon_days: int = 1,
         benchmark_symbol: str | None = None,
+        fx_mode: str = "strict",
     ) -> PortfolioRiskMetrics:
         if not holdings:
             raise ValueError("Portfolio must contain at least one holding.")
@@ -242,21 +311,7 @@ class MarketRiskEngine:
             dups = [s for s in symbols if symbols.count(s) > 1]
             raise ValueError(f"Duplicate holding symbol detected: '{dups[0]}'. Each holding in the portfolio must be unique.")
 
-        # Validate portfolio currency matches asset currency
-        asset_currencies = {s: get_symbol_currency(s) for s in symbols}
-        distinct_asset_currencies = set(asset_currencies.values())
-        if len(distinct_asset_currencies) > 1:
-            raise ValueError(
-                f"Mixed-currency portfolio detected: {asset_currencies}. "
-                "Portfolios must be strictly single-currency (all USD or all INR). "
-                "Silent FX conversion is prohibited."
-            )
-        inferred_curr = next(iter(distinct_asset_currencies))
-        if currency.upper() != inferred_curr:
-            raise ValueError(
-                f"Portfolio currency mismatch: specified currency is '{currency.upper()}', "
-                f"but assets are denominated in '{inferred_curr}' ({symbols})."
-            )
+        policy = self.resolve_currency_policy(symbols, currency, fx_mode)
 
         # Handle weights vs position values
         has_pos_values = any(h.position_value is not None for h in holdings)
@@ -289,7 +344,7 @@ class MarketRiskEngine:
             )
 
         # Load prices via unified data service
-        prices, data_src, _, _ = self.data_service.load_aligned_prices(symbols, allow_live=True)
+        prices, data_src, fx = self.load_prices_with_policy(symbols, policy, allow_live=True)
         if data_source_mode == "offline_snapshot":
             data_source_mode = data_src
 
@@ -421,6 +476,7 @@ class MarketRiskEngine:
             "selected_var_method": method_norm,
             "horizon_days": horizon_days,
             "risk_free_rate": rf_rate,
+            "fx_mode": policy.mode,
         }
 
         return PortfolioRiskMetrics(
@@ -472,13 +528,17 @@ class MarketRiskEngine:
             beta_to_benchmark=beta_to_bench,
             correlation_to_benchmark=corr_to_bench,
             chart_series=chart_series,
+            fx_converted=bool(fx.get("fx_converted")),
+            fx=fx,
         )
 
 
     def run_stress_test(
         self,
         holdings: list[Holding],
-        scenarios: list[StressScenario] | None = None
+        scenarios: list[StressScenario] | None = None,
+        currency: str | None = None,
+        fx_mode: str = "strict",
     ) -> list[StressScenarioResult]:
         """
         Calculates deterministic portfolio losses under historical snapshot worst-case
@@ -506,10 +566,14 @@ class MarketRiskEngine:
             if abs(weight_sum - 1.0) > 1e-4:
                 raise ValueError(f"Holdings weights must sum to 1.0 (got {weight_sum:.6f}, tolerance +/-1e-4).")
 
+        # Strict mode keeps the original behaviour (price loading rejects mixed currencies);
+        # convert_to_base expresses every shock in the base currency.
+        policy = self.resolve_currency_policy(symbols, currency, fx_mode) if (fx_mode or "strict") != "strict" else None
+
         is_derived = scenarios is None
         if scenarios is None:
             # Derive stress shocks from real snapshot observations (worst single-day and max drawdown)
-            scenarios = self.derive_historical_stress_scenarios(symbols)
+            scenarios = self.derive_historical_stress_scenarios(symbols, policy)
 
         results = []
         for scen in scenarios:
@@ -528,8 +592,11 @@ class MarketRiskEngine:
                 "scenario_derivation": "historical_snapshot_worst_window" if is_derived else "user_specified",
                 "description": scen.description,
                 "holding_weights": weights,
-                "loss_convention": "One-period linear stress loss approximation"
+                "loss_convention": "One-period linear stress loss approximation",
+                "fx_mode": policy.mode if policy else "strict",
             }
+            if policy is not None and policy.convert:
+                assumptions["fx_note"] = f"Shocks are measured on prices converted into {policy.base} with USDINR=X."
 
             results.append(StressScenarioResult(
                 scenario_name=scen.name,

@@ -34,6 +34,7 @@ export default function MarketRiskPage() {
       portfolio_value: builder.portfolioValue,
       var_method: params.varMethod,
       horizon_days: params.horizonDays,
+      fx_mode: builder.fxMode,
     });
 
   return (

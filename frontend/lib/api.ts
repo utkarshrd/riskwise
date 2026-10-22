@@ -217,6 +217,27 @@ export interface PortfolioRiskMetrics {
   beta_to_benchmark?: number | null;
   correlation_to_benchmark?: number | null;
   chart_series?: ChartSeries | null;
+  fx_converted?: boolean;
+  fx?: FxInfo | null;
+}
+
+export type FxMode = "strict" | "convert_to_base";
+
+/** How currencies were handled. The conversion fields are present only when fx_converted is true. */
+export interface FxInfo {
+  mode: FxMode;
+  base_currency: string;
+  fx_converted: boolean;
+  fx_pair?: string;
+  fx_data_source?: string;
+  converted_symbols?: string[];
+  conversion_directions?: Record<string, string>;
+  series_start?: string;
+  series_end?: string;
+  observations?: number;
+  rate_start?: number;
+  rate_end?: number;
+  note?: string;
 }
 
 export interface ChartSeries {
@@ -268,6 +289,7 @@ export interface VaRValidationResponse {
     forecast_var: number;
     is_exception: boolean;
   }>;
+  fx?: FxInfo | null;
 }
 
 export interface VaRModelComparisonItem {
@@ -296,6 +318,7 @@ export interface VaRCompareResponse {
   models: VaRModelComparisonItem[];
   recommended_method: string;
   recommendation_reason: string;
+  fx?: FxInfo | null;
 }
 
 export interface StockSearchResult {
@@ -489,6 +512,7 @@ export const api = {
       var_method?: string;
       horizon_days?: number;
       benchmark_symbol?: string;
+      fx_mode?: FxMode;
     }) =>
       apiFetch<PortfolioRiskMetrics>("/api/v1/market/portfolio/analyze", {
         method: "POST",
@@ -496,11 +520,12 @@ export const api = {
       }),
     stressTest: (
       holdings: Array<{ symbol: string; weight?: number; position_value?: number }>,
-      custom_scenarios?: Array<{ name: string; description: string; shocks: Record<string, number> }>
+      custom_scenarios?: Array<{ name: string; description: string; shocks: Record<string, number> }>,
+      fx?: { currency: string; fx_mode: FxMode }
     ) =>
       apiFetch<StressScenarioResult[]>("/api/v1/market/portfolio/stress-test", {
         method: "POST",
-        body: JSON.stringify({ holdings, custom_scenarios }),
+        body: JSON.stringify({ holdings, custom_scenarios, ...fx }),
       }),
     validateVar: (params: {
       holdings: Array<{ symbol: string; weight?: number; position_value?: number }>;
@@ -509,6 +534,7 @@ export const api = {
       method?: string;
       confidence_level?: number;
       lookback_window?: number;
+      fx_mode?: FxMode;
     }) =>
       apiFetch<VaRValidationResponse>("/api/v1/market/var/validate", {
         method: "POST",
@@ -521,6 +547,7 @@ export const api = {
       confidence_level?: number;
       lookback_window?: number;
       methods?: string[];
+      fx_mode?: FxMode;
     }) =>
       apiFetch<VaRCompareResponse>("/api/v1/market/var/compare", {
         method: "POST",

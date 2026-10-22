@@ -201,3 +201,15 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Narrow-window layout:** a collapsing sidebar and compact header were added so the page no longer overflows, but narrow-window layouts were not verified beyond that (out of scope: this is a desktop website).
 - **Dev note:** after editing `globals.css`, Turbopack kept serving a stale stylesheet until `.next` was cleared. Production build is unaffected.
 - **Verified:** 206 backend tests, `tsc`, `eslint` (0 problems), `next build` exit 0; desktop (1440px) screenshots of Market Risk, VaR Validation, Credit and the methods page in light and dark with 0 console errors, in `docs/screenshots/b1/`. Tooltip open and link target checked in the DOM.
+
+## B2: USD/INR opt-in FX mode (2026-10-22)
+- **Decision:** Add `fx_mode` (`strict` default, `convert_to_base`) to analyze, stress-test, VaR validate and VaR compare. The old `fx_conversion: true` flag is kept as an alias for `convert_to_base`.
+- **Reasoning:**
+  1. Currency rules were copied into three places (risk engine, validation engine, data service) and the data service's FX path was never reachable from the API. One `resolve_currency_policy` in the risk engine now decides for every endpoint.
+  2. The portfolio `currency` is the base. Assets in the other currency are multiplied (USD to INR) or divided (INR to USD) by the daily `USDINR=X` close on shared dates. Only USD and INR are supported; anything else is rejected rather than guessed.
+  3. Position values and weights are read as base-currency amounts. Returns therefore include the currency movement, and the response says so.
+  4. Every converted response carries `fx`: pair, data source, converted symbols and directions, the exact FX date range and observation count used, and the rate at the start and end of that range. The date range equals the analysis window (tested).
+  5. Strict mode is unchanged, and its error now names the opt-in. Unknown `fx_mode` values fail validation (422).
+- **Tests:** `test_fx_mode.py` (13). Includes an independent rebuild of the converted portfolio from the raw CSVs that matches the reported volatility to 6e-5.
+- **UI:** a "Allow mixed USD and INR holdings" checkbox on Market Risk and VaR Validation, a one-click "Convert to X" on the mixed-currency error, and an FX summary card on results. While conversion is on, symbol search is not filtered by currency and no `.NS` suffix is auto-added.
+- **Limit:** FX rates come from the same offline snapshot or live Yahoo series as prices; days without an FX quote are dropped from the aligned window.

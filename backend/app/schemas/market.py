@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class HoldingSchema(BaseModel):
@@ -9,7 +9,29 @@ class HoldingSchema(BaseModel):
     position_value: float | None = Field(default=None, ge=0.0, description="Optional monetary position value in base currency")
 
 
-class PortfolioAnalyzeRequest(BaseModel):
+FxMode = Literal["strict", "convert_to_base"]
+
+
+class FxModeFields(BaseModel):
+    """FX handling shared by every request that loads prices. Default is strict single-currency."""
+
+    fx_mode: FxMode = Field(
+        default="strict",
+        description="'strict' rejects mixed-currency portfolios. 'convert_to_base' converts assets into the portfolio currency using USD/INR history.",
+    )
+    fx_conversion: bool = Field(
+        default=False,
+        description="Deprecated alias: true behaves like fx_mode='convert_to_base'.",
+    )
+
+    @model_validator(mode="after")
+    def _apply_legacy_flag(self):
+        if self.fx_conversion and self.fx_mode == "strict":
+            self.fx_mode = "convert_to_base"
+        return self
+
+
+class PortfolioAnalyzeRequest(FxModeFields):
     portfolio_name: str = Field(default="My Portfolio", description="Descriptive portfolio identifier")
     currency: str = Field(default="USD", description="Portfolio base currency (single-currency portfolios only)")
     holdings: list[HoldingSchema] = Field(..., min_length=1, description="List of asset holdings with weights or position values")
@@ -18,7 +40,6 @@ class PortfolioAnalyzeRequest(BaseModel):
     return_method: str = Field(default="simple", description="'simple' or 'log'")
     var_method: str = Field(default="historical", description="Selected VaR method: 'historical', 'gaussian', 'student_t', 'cornish_fisher', 'ewma', 'monte_carlo', 'garch', 'fhs'")
     horizon_days: int = Field(default=1, ge=1, le=30, description="VaR holding horizon in trading days (default: 1)")
-    fx_conversion: bool = Field(default=False, description="Explicit opt-in to convert mixed-currency assets using historical FX rates")
     benchmark_symbol: str | None = Field(default=None, description="Optional custom benchmark symbol (defaults to ^NSEI for INR, SPY for USD)")
 
 
@@ -70,6 +91,7 @@ class PortfolioAnalyzeResponse(BaseModel):
     correlation_to_benchmark: float | None = None
     fx_converted: bool = False
     data_freshness: dict[str, Any] | None = None
+    fx: dict[str, Any] | None = None
     chart_series: dict[str, Any] | None = None
 
 
@@ -112,8 +134,9 @@ class CustomStressScenarioSchema(BaseModel):
     shocks: dict[str, float] = Field(..., description="Per-symbol percentage shocks, e.g. {'AAPL': -0.25}")
 
 
-class PortfolioStressTestRequest(BaseModel):
+class PortfolioStressTestRequest(FxModeFields):
     holdings: list[HoldingSchema] = Field(..., min_length=1)
+    currency: str | None = Field(default=None, description="Base currency; required when fx_mode is convert_to_base")
     custom_scenarios: list[CustomStressScenarioSchema] | None = Field(default=None)
 
 
@@ -124,7 +147,7 @@ class StressScenarioResponse(BaseModel):
     assumptions: dict[str, Any]
 
 
-class VaRValidationRequest(BaseModel):
+class VaRValidationRequest(FxModeFields):
     portfolio_name: str = Field(default="Validation Portfolio")
     currency: str = Field(default="USD")
     holdings: list[HoldingSchema] = Field(..., min_length=1)
@@ -162,6 +185,7 @@ class VaRValidationResponse(BaseModel):
     basel_capital_multiplier: float | None = 3.00
     summary_message: str
     validation_points: list[dict[str, Any]]
+    fx: dict[str, Any] | None = None
 
 
 class VaRModelComparisonItem(BaseModel):
@@ -181,7 +205,7 @@ class VaRModelComparisonItem(BaseModel):
     score: float
 
 
-class VaRCompareRequest(BaseModel):
+class VaRCompareRequest(FxModeFields):
     portfolio_name: str = Field(default="Comparison Portfolio")
     currency: str = Field(default="USD")
     holdings: list[HoldingSchema] = Field(..., min_length=1)
@@ -202,6 +226,7 @@ class VaRCompareResponse(BaseModel):
     models: list[VaRModelComparisonItem]
     recommended_method: str
     recommendation_reason: str
+    fx: dict[str, Any] | None = None
 
 
 class StockSearchResult(BaseModel):

@@ -1,8 +1,9 @@
 import { ShieldCheck } from "lucide-react";
 import VaRBacktestChart from "@/components/VaRBacktestChart";
 import VaRModelComparison from "@/components/VaRModelComparison";
+import FxSummary from "@/components/portfolio/FxSummary";
 import { EmptyState, ResultsSkeleton } from "@/components/ui";
-import type { VaRValidationResponse } from "@/lib/api";
+import type { FxMode, VaRValidationResponse } from "@/lib/api";
 import CoverageTests from "./CoverageTests";
 import ExceptionTimeline from "./ExceptionTimeline";
 import SummaryStats from "./SummaryStats";
@@ -14,6 +15,7 @@ interface ResultsPanelProps {
   currency: string;
   confidenceLevel: number;
   lookbackWindow: number;
+  fxMode: FxMode;
   method: string;
   onSelectMethod: (method: string) => void;
 }
@@ -25,6 +27,7 @@ export default function ResultsPanel({
   currency,
   confidenceLevel,
   lookbackWindow,
+  fxMode,
   method,
   onSelectMethod,
 }: ResultsPanelProps) {
@@ -46,6 +49,7 @@ export default function ResultsPanel({
 
   return (
     <div className="space-y-6">
+      <FxSummary fx={result.fx} />
       <SummaryStats result={result} />
       <VaRBacktestChart validationResult={result} />
       <VaRModelComparison
@@ -53,6 +57,7 @@ export default function ResultsPanel({
         currency={currency}
         confidenceLevel={confidenceLevel}
         lookbackWindow={lookbackWindow}
+        fxMode={fxMode}
         onSelectMethod={onSelectMethod}
         activeMethod={method}
       />

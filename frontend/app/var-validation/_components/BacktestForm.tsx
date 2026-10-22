@@ -1,6 +1,7 @@
 import { Activity, Calendar, Sliders } from "lucide-react";
 import NSEStockSearch from "@/components/NSEStockSearch";
 import CurrencyAlerts from "@/components/portfolio/CurrencyAlerts";
+import FxModeToggle from "@/components/portfolio/FxModeToggle";
 import HoldingsEditor from "@/components/portfolio/HoldingsEditor";
 import PresetPicker from "@/components/portfolio/PresetPicker";
 import { Card, CardHeader, Field, inputClass, MetricInfo } from "@/components/ui";
@@ -87,7 +88,7 @@ export default function BacktestForm({
 
       <NSEStockSearch
         onSelectSymbol={(symbol, name, currency) => b.addAsset({ symbol, name, currency })}
-        activeCurrency={b.currency}
+        activeCurrency={b.fxMode === "strict" ? b.currency : ""}
         disabledSymbols={b.holdings.map((h) => h.symbol)}
       />
 
@@ -104,12 +105,16 @@ export default function BacktestForm({
         onNormalize={b.normalizeWeights}
       />
 
+      <FxModeToggle value={b.fxMode} onChange={b.setFxMode} baseCurrency={b.currency} />
+
       <CurrencyAlerts
         currency={b.currency}
         distinctCurrencies={b.distinctCurrencies}
         hasMixedCurrencies={b.hasMixedCurrencies}
         currencyMismatch={b.currencyMismatch}
+        fxMode={b.fxMode}
         onSetCurrency={b.changeCurrency}
+        onEnableConversion={() => b.setFxMode("convert_to_base")}
       />
 
       <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
@@ -123,11 +128,11 @@ export default function BacktestForm({
       <button
         type="button"
         onClick={onRun}
-        disabled={loading || b.hasMixedCurrencies || b.holdings.length === 0}
+        disabled={loading || b.blockedByCurrency || b.holdings.length === 0}
         className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
       >
         <Activity className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        {loading ? "Running Rolling VaR Backtest…" : b.hasMixedCurrencies ? "Resolve Currency Mismatch to Proceed" : "Execute Rolling VaR Validation"}
+        {loading ? "Running Rolling VaR Backtest…" : b.blockedByCurrency ? "Resolve Currency Mismatch to Proceed" : "Execute Rolling VaR Validation"}
       </button>
     </Card>
   );

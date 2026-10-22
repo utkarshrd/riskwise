@@ -423,23 +423,26 @@ class MarketDataService:
 
         distinct_currencies = set(currencies.values())
         fx_info: dict[str, Any] = {"fx_converted": False}
+        fx_series: pd.Series | None = None
+        fx_source: str | None = None
 
         # Check currency uniformity
-        if len(distinct_currencies) > 1:
-            if not fx_conversion:
-                raise ValueError(
-                    f"Mixed-currency portfolio detected: {currencies}. "
-                    "Portfolios must be strictly single-currency (all USD or all INR). "
-                    "Silent FX conversion is prohibited. Set fx_conversion=True to opt into explicit base-currency conversion."
-                )
+        if len(distinct_currencies) > 1 and not fx_conversion:
+            raise ValueError(
+                f"Mixed-currency portfolio detected: {currencies}. "
+                "Portfolios must be strictly single-currency (all USD or all INR). "
+                "Silent FX conversion is prohibited. Set fx_mode='convert_to_base' to opt into explicit base-currency conversion."
+            )
 
-            # Explicit FX conversion mode
-            target_curr = (base_currency or "INR").upper()
+        target_curr = (base_currency or "INR").upper()
+        # Explicit FX conversion mode: convert every asset that is not already in the base currency
+        if fx_conversion and distinct_currencies != {target_curr}:
             fx_df, fx_source = self.get_symbol_price_history("USDINR=X", allow_live=allow_live)
             fx_series = fx_df.set_index("Date")["adj_close"]
             sources.append(fx_source)
 
             converted_symbols = []
+            directions: dict[str, str] = {}
             for i, can_sym in enumerate(canonical_symbols):
                 asset_curr = currencies[can_sym]
                 if asset_curr != target_curr:
@@ -450,15 +453,22 @@ class MarketDataService:
                     elif asset_curr == "INR" and target_curr == "USD":
                         # INR to USD: divide by USD/INR rate
                         aligned_asset[can_sym] = aligned_asset[can_sym] / aligned_asset["fx_rate"]
+                    else:
+                        raise ValueError(
+                            f"FX conversion from {asset_curr} to {target_curr} is not supported; only USD and INR are available."
+                        )
                     dfs[i] = aligned_asset[[can_sym]]
                     currencies[can_sym] = target_curr
                     converted_symbols.append(can_sym)
+                    directions[can_sym] = f"{asset_curr}->{target_curr}"
 
             fx_info = {
                 "fx_converted": True,
                 "base_currency": target_curr,
                 "fx_pair": "USDINR=X",
+                "fx_data_source": fx_source,
                 "converted_symbols": converted_symbols,
+                "conversion_directions": directions,
                 "note": (
                     f"Converted {len(converted_symbols)} asset(s) ({converted_symbols}) into {target_curr} "
                     f"using historical daily USD/INR exchange rates from USDINR=X."
@@ -475,6 +485,19 @@ class MarketDataService:
             raise ValueError(
                 f"Insufficient common trading dates for portfolio {canonical_symbols}. "
                 f"Found only {len(aligned)} aligned trading sessions; minimum required is 30."
+            )
+
+        if fx_info["fx_converted"] and fx_series is not None:
+            # State exactly which slice of the FX series the converted prices rest on
+            rates = fx_series.reindex(aligned.index)
+            fx_info.update(
+                {
+                    "series_start": str(aligned.index[0].date()),
+                    "series_end": str(aligned.index[-1].date()),
+                    "observations": int(len(aligned)),
+                    "rate_start": round(float(rates.iloc[0]), 4),
+                    "rate_end": round(float(rates.iloc[-1]), 4),
+                }
             )
 
         overall_source = "live_download" if any(s == "live_download" for s in sources) else "offline_snapshot"

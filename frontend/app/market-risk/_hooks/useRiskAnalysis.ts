@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { api, type PortfolioRiskMetrics, type StressScenarioResult } from "@/lib/api";
+import { api, type FxMode, type PortfolioRiskMetrics, type StressScenarioResult } from "@/lib/api";
 
 type Holdings = Array<{ symbol: string; weight?: number; position_value?: number }>;
 
@@ -14,6 +14,7 @@ export interface AnalysisRequest {
   portfolio_value: number;
   var_method: string;
   horizon_days: number;
+  fx_mode: FxMode;
 }
 
 /** Runs the risk analysis and the historical stress tests, tracking loading and error state for each. */
@@ -35,7 +36,7 @@ export function useRiskAnalysis() {
 
       setStressLoading(true);
       try {
-        setStressResults(await api.market.stressTest(req.holdings));
+        setStressResults(await api.market.stressTest(req.holdings, undefined, { currency: req.currency, fx_mode: req.fx_mode }));
       } catch (err) {
         setStressResults(null);
         setStressError(err instanceof Error ? err.message : "Stress tests failed.");

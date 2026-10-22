@@ -50,6 +50,7 @@ class VaRValidationResult(BaseModel):
     christoffersen_cc_test_passed: bool | None = None
     summary_message: str
     validation_points: list[VaRValidationPoint]
+    fx: dict[str, Any] | None = None
 
 
 class VaRValidationEngine:
@@ -64,6 +65,7 @@ class VaRValidationEngine:
         method: str = "historical",
         confidence_level: float = 0.95,
         lookback_window: int = 250,
+        fx_mode: str = "strict",
     ) -> VaRValidationResult:
         if lookback_window < 50:
             raise ValueError("Lookback window must be at least 50 trading days.")
@@ -77,21 +79,7 @@ class VaRValidationEngine:
             dups = [s for s in symbols if symbols.count(s) > 1]
             raise ValueError(f"Duplicate holding symbol detected: '{dups[0]}'. Each holding must be unique.")
 
-        # Validate portfolio currency matches asset currency
-        asset_currencies = {s: get_symbol_currency(s) for s in symbols}
-        distinct_asset_currencies = set(asset_currencies.values())
-        if len(distinct_asset_currencies) > 1:
-            raise ValueError(
-                f"Mixed-currency portfolio detected: {asset_currencies}. "
-                "Portfolios must be strictly single-currency (all USD or all INR). "
-                "Silent FX conversion is prohibited."
-            )
-        inferred_curr = next(iter(distinct_asset_currencies))
-        if currency.upper() != inferred_curr:
-            raise ValueError(
-                f"Portfolio currency mismatch: specified currency is '{currency.upper()}', "
-                f"but assets are denominated in '{inferred_curr}' ({symbols})."
-            )
+        policy = self.risk_engine.resolve_currency_policy(symbols, currency, fx_mode)
 
         has_pos_values = any(h.position_value is not None for h in holdings)
         has_weights = any(h.weight is not None for h in holdings)
@@ -112,7 +100,7 @@ class VaRValidationEngine:
                 raise ValueError(f"Holdings weights must sum to 1.0 (got {weight_sum:.6f}, tolerance +/-1e-4).")
 
         # Load price series and calculate daily returns strictly from adj_close
-        prices = self.risk_engine.load_price_history(symbols, allow_live=True)
+        prices, _, fx = self.risk_engine.load_prices_with_policy(symbols, policy, allow_live=True)
         returns_df = self.risk_engine.calculate_returns(prices, method="simple")
         portfolio_returns = returns_df[symbols].dot(weights)
         portfolio_losses = -portfolio_returns  # Loss convention: loss is positive
@@ -297,6 +285,7 @@ class VaRValidationEngine:
             christoffersen_cc_test_passed=christoffersen_cc_passed,
             summary_message=summary,
             validation_points=validation_points,
+            fx=fx,
         )
 
     def compare_models(
@@ -307,6 +296,7 @@ class VaRValidationEngine:
         confidence_level: float = 0.95,
         lookback_window: int = 250,
         methods: list[str] | None = None,
+        fx_mode: str = "strict",
     ) -> dict[str, Any]:
         """
         Runs rolling backtests for all candidate models on the exact same estimation window,
@@ -315,6 +305,7 @@ class VaRValidationEngine:
         """
         candidate_methods = methods or ["historical", "parametric", "student_t", "cornish_fisher", "ewma"]
         results: list[dict[str, Any]] = []
+        fx_info: dict[str, Any] | None = None
 
         for m in candidate_methods:
             try:
@@ -325,7 +316,9 @@ class VaRValidationEngine:
                     method=m,
                     confidence_level=confidence_level,
                     lookback_window=lookback_window,
+                    fx_mode=fx_mode,
                 )
+                fx_info = res.fx
 
                 # Score model (lower is better):
                 # 1. Base penalty: absolute error in exception rate (scaled)
@@ -389,4 +382,5 @@ class VaRValidationEngine:
             "models": results,
             "recommended_method": best["method"],
             "recommendation_reason": reason,
+            "fx": fx_info,
         }

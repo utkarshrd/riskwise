@@ -201,6 +201,7 @@ def analyze_portfolio(request: PortfolioAnalyzeRequest, db: Session = Depends(ge
             var_method=request.var_method,
             horizon_days=request.horizon_days,
             benchmark_symbol=request.benchmark_symbol,
+            fx_mode=request.fx_mode,
         )
 
         # Persist run to database
@@ -239,7 +240,12 @@ def run_market_stress_test(request: PortfolioStressTestRequest):
                 for s in request.custom_scenarios
             ]
 
-        results = engine.run_stress_test(holdings=holdings, scenarios=custom_scenarios)
+        results = engine.run_stress_test(
+            holdings=holdings,
+            scenarios=custom_scenarios,
+            currency=request.currency,
+            fx_mode=request.fx_mode,
+        )
         return [StressScenarioResponse(**r.model_dump()) for r in results]
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail={"field": "holdings.symbol", "message": str(e)}) from e
@@ -264,7 +270,8 @@ def validate_var_model(request: VaRValidationRequest, db: Session = Depends(get_
             currency=request.currency,
             method=request.method,
             confidence_level=request.confidence_level,
-            lookback_window=request.lookback_window
+            lookback_window=request.lookback_window,
+            fx_mode=request.fx_mode,
         )
 
         # Persist validation run
@@ -344,7 +351,8 @@ def validate_var_model(request: VaRValidationRequest, db: Session = Depends(get_
             christoffersen_cc_p_value=result.christoffersen_cc_p_value,
             christoffersen_cc_test_passed=result.christoffersen_cc_test_passed,
             summary_message=result.summary_message,
-            validation_points=[p.model_dump() for p in result.validation_points]
+            validation_points=[p.model_dump() for p in result.validation_points],
+            fx=result.fx,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail={"field": "holdings.symbol", "message": str(e)}) from e
@@ -448,6 +456,7 @@ def var_model_compare(
             confidence_level=request.confidence_level,
             lookback_window=request.lookback_window,
             methods=request.methods,
+            fx_mode=request.fx_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -464,6 +473,7 @@ def var_model_compare(
         ],
         recommended_method=result["recommended_method"],
         recommendation_reason=result["recommendation_reason"],
+        fx=result.get("fx"),
     )
 
 

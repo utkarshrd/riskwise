@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, type FxMode } from "@/lib/api";
 import {
   inferSymbolCurrency,
   withPositionValues,
@@ -37,13 +37,18 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
   const [portfolioValue, setPortfolioValue] = useState(initial.defaultVal);
   const [inputMode, setInputMode] = useState<InputMode>("weight");
   const [holdings, setHoldings] = useState<HoldingRow[]>(() => withPositionValues(initial));
+  // strict (default) keeps every portfolio single-currency; convert_to_base is an explicit opt-in
+  const [fxMode, setFxMode] = useState<FxMode>("strict");
+  const strict = fxMode === "strict";
 
   const totalWeight = holdings.reduce((sum, h) => sum + (h.weight || 0), 0);
   const totalPositionValue = holdings.reduce((sum, h) => sum + (h.position_value || 0), 0);
 
   const distinctCurrencies = Array.from(new Set(holdings.map((h) => h.currency || inferSymbolCurrency(h.symbol))));
   const hasMixedCurrencies = distinctCurrencies.length > 1;
-  const currencyMismatch = !hasMixedCurrencies && !!distinctCurrencies[0] && distinctCurrencies[0] !== currency;
+  const currencyMismatch = strict && !hasMixedCurrencies && !!distinctCurrencies[0] && distinctCurrencies[0] !== currency;
+  /** Mixed currencies only block a run while conversion has not been opted into. */
+  const blockedByCurrency = strict && hasMixedCurrencies;
 
   const selectPreset = (key: string) => {
     const preset = presets[key];
@@ -63,7 +68,7 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
 
   const addAsset = async (item: NewAsset) => {
     let rawSym = item.symbol.toUpperCase().trim();
-    if (currency === "INR" && !rawSym.includes(".") && !rawSym.startsWith("^")) {
+    if (strict && currency === "INR" && !rawSym.includes(".") && !rawSym.startsWith("^")) {
       rawSym = `${rawSym}.NS`;
     }
     if (holdings.some((h) => h.symbol === rawSym)) {
@@ -72,7 +77,7 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
     }
 
     const itemCurrency = item.currency || inferSymbolCurrency(rawSym, currency);
-    if (holdings.length === 0) setCurrency(itemCurrency);
+    if (holdings.length === 0 && strict) setCurrency(itemCurrency);
 
     const newWeight = holdings.length === 0 ? 1.0 : 0.1;
     setSelectedPreset("custom");
@@ -91,7 +96,7 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
     onProblem(null);
 
     try {
-      const res = await api.market.validateSymbol(rawSym, currency);
+      const res = await api.market.validateSymbol(rawSym, strict ? currency : undefined);
       setHoldings((prev) =>
         prev.map((h) =>
           h.symbol === rawSym
@@ -179,6 +184,9 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
     distinctCurrencies,
     hasMixedCurrencies,
     currencyMismatch,
+    blockedByCurrency,
+    fxMode,
+    setFxMode,
     setPortfolioName,
     setPortfolioValue,
     setInputMode,

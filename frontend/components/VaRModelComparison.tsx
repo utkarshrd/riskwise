@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { Award, CheckCircle2, Activity, Sparkles, Loader2 } from "lucide-react";
-import { api, VaRCompareResponse, VaRModelComparisonItem } from "@/lib/api";
+import { api, FxMode, VaRCompareResponse, VaRModelComparisonItem } from "@/lib/api";
 
 interface VaRModelComparisonProps {
   holdings: Array<{ symbol: string; weight: number; position_value?: number }>;
   currency: string;
   confidenceLevel: number;
   lookbackWindow: number;
+  fxMode?: FxMode;
   onSelectMethod: (method: string) => void;
   activeMethod: string;
 }
@@ -18,6 +19,7 @@ export default function VaRModelComparison({
   currency,
   confidenceLevel,
   lookbackWindow,
+  fxMode = "strict",
   onSelectMethod,
   activeMethod,
 }: VaRModelComparisonProps) {
@@ -40,6 +42,7 @@ export default function VaRModelComparison({
         confidence_level: confidenceLevel,
         lookback_window: lookbackWindow,
         methods: ["historical", "parametric", "student_t", "cornish_fisher", "ewma"],
+        fx_mode: fxMode,
       });
       setComparison(res);
     } catch (err: unknown) {

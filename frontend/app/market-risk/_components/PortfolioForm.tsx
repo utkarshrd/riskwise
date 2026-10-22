@@ -1,6 +1,7 @@
 import { Activity, Calendar, DollarSign, Sliders } from "lucide-react";
 import NSEStockSearch from "@/components/NSEStockSearch";
 import CurrencyAlerts from "@/components/portfolio/CurrencyAlerts";
+import FxModeToggle from "@/components/portfolio/FxModeToggle";
 import HoldingsEditor from "@/components/portfolio/HoldingsEditor";
 import PresetPicker from "@/components/portfolio/PresetPicker";
 import { Card, CardHeader, Field, inputClass, MetricInfo } from "@/components/ui";
@@ -16,7 +17,7 @@ interface PortfolioFormProps {
 }
 
 export default function PortfolioForm({ builder: b, params: p, loading, onRun }: PortfolioFormProps) {
-  const runDisabled = loading || b.hasMixedCurrencies || b.holdings.length === 0;
+  const runDisabled = loading || b.blockedByCurrency || b.holdings.length === 0;
 
   return (
     <Card className="space-y-5">
@@ -82,7 +83,7 @@ export default function PortfolioForm({ builder: b, params: p, loading, onRun }:
 
       <NSEStockSearch
         onSelectSymbol={(symbol, name, currency) => b.addAsset({ symbol, name, currency })}
-        activeCurrency={b.currency}
+        activeCurrency={b.fxMode === "strict" ? b.currency : ""}
         disabledSymbols={b.holdings.map((h) => h.symbol)}
       />
 
@@ -98,12 +99,16 @@ export default function PortfolioForm({ builder: b, params: p, loading, onRun }:
         onNormalize={b.normalizeWeights}
       />
 
+      <FxModeToggle value={b.fxMode} onChange={b.setFxMode} baseCurrency={b.currency} />
+
       <CurrencyAlerts
         currency={b.currency}
         distinctCurrencies={b.distinctCurrencies}
         hasMixedCurrencies={b.hasMixedCurrencies}
         currencyMismatch={b.currencyMismatch}
+        fxMode={b.fxMode}
         onSetCurrency={b.changeCurrency}
+        onEnableConversion={() => b.setFxMode("convert_to_base")}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -164,7 +169,7 @@ export default function PortfolioForm({ builder: b, params: p, loading, onRun }:
         className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
       >
         <Activity className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        {loading ? "Computing Risk Metrics…" : b.hasMixedCurrencies ? "Resolve Currency Mismatch to Proceed" : "Run Portfolio Risk Assessment"}
+        {loading ? "Computing Risk Metrics…" : b.blockedByCurrency ? "Resolve Currency Mismatch to Proceed" : "Run Portfolio Risk Assessment"}
       </button>
     </Card>
   );

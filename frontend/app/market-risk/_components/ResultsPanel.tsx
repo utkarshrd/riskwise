@@ -1,5 +1,6 @@
 import { PieChart } from "lucide-react";
 import MarketRiskCharts from "@/components/MarketRiskCharts";
+import FxSummary from "@/components/portfolio/FxSummary";
 import { Alert, Badge, EmptyState, ResultsSkeleton } from "@/components/ui";
 import type { PortfolioRiskMetrics, StressScenarioResult } from "@/lib/api";
 import CorrelationMatrix from "./CorrelationMatrix";
@@ -51,6 +52,8 @@ export default function ResultsPanel({ metrics, loading, stressResults, stressLo
         </div>
         <Badge>Source: {sourceLabel(metrics.data_source_mode)}</Badge>
       </div>
+
+      <FxSummary fx={metrics.fx} />
 
       <Alert tone="info">
         <strong>Loss convention:</strong> a loss is a positive number. A 95% 1-day VaR of 2.14% means that on about 5% of days the portfolio loses more than 2.14%.

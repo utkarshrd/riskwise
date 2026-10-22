@@ -34,6 +34,7 @@ export default function VaRValidationPage() {
       method,
       confidence_level: confidenceLevel,
       lookback_window: lookbackWindow,
+      fx_mode: builder.fxMode,
     });
 
   return (
@@ -78,6 +79,7 @@ export default function VaRValidationPage() {
             currency={builder.currency}
             confidenceLevel={confidenceLevel}
             lookbackWindow={lookbackWindow}
+            fxMode={builder.fxMode}
             method={method}
             onSelectMethod={setMethod}
           />
