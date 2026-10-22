@@ -11,11 +11,10 @@ import {
   YAxis,
   Tooltip,
   Legend,
-  ReferenceLine,
   CartesianGrid,
   Cell,
 } from "recharts";
-import { TrendingUp, AlertTriangle, PieChart, Layers, ArrowDownRight } from "lucide-react";
+import { TrendingUp, PieChart, Layers, ArrowDownRight } from "lucide-react";
 import { PortfolioRiskMetrics } from "@/lib/api";
 
 interface MarketRiskChartsProps {
@@ -24,90 +23,40 @@ interface MarketRiskChartsProps {
 }
 
 export default function MarketRiskCharts({ metrics, currency }: MarketRiskChartsProps) {
-  // 1. Generate Cumulative Return vs Benchmark series
+  // Series come from the backend and are computed from the portfolio's observed daily returns.
+  const series = metrics.chart_series ?? null;
+
+  // 1. Cumulative return vs benchmark (observed, in %)
   const cumulativeData = useMemo(() => {
-    const days = Math.min(metrics.observations_count || 250, 252);
-    const dailyMean = metrics.mean_daily_return || 0.0004;
-    const dailyVol = metrics.annualized_volatility / Math.sqrt(252);
-    const beta = metrics.beta_to_benchmark ?? 1.0;
-    const benchVol = (metrics.benchmark_volatility ?? metrics.annualized_volatility) / Math.sqrt(252);
-    const benchDailyMean = dailyMean / (beta !== 0 ? beta : 1.0);
+    if (!series) return [];
+    return series.dates.map((date, i) => ({
+      date,
+      portfolio: series.portfolio_cumulative_pct[i],
+      benchmark: series.benchmark_cumulative_pct ? series.benchmark_cumulative_pct[i] : null,
+    }));
+  }, [series]);
 
-    const points = [];
-    let portWealth = 100.0;
-    let benchWealth = 100.0;
-
-    const startDate = new Date(metrics.start_date || "2023-01-01");
-
-    for (let i = 0; i < days; i++) {
-      const dt = new Date(startDate);
-      dt.setDate(dt.getDate() + Math.floor((i * 7) / 5)); // skip weekends approximately
-      const dateStr = dt.toISOString().slice(0, 10);
-
-      // Deterministic pseudo-random seed per day for reproducible display curve
-      const sinVal = Math.sin(i * 137.5 + 42);
-      const cosVal = Math.cos(i * 93.7 + 17);
-
-      const portRet = dailyMean + dailyVol * sinVal * 0.7;
-      const benchRet = benchDailyMean + benchVol * (sinVal * 0.5 + cosVal * 0.4);
-
-      portWealth *= 1.0 + portRet;
-      benchWealth *= 1.0 + benchRet;
-
-      points.push({
-        date: dateStr,
-        portfolio: Number(((portWealth - 100.0)).toFixed(2)),
-        benchmark: Number(((benchWealth - 100.0)).toFixed(2)),
-      });
-    }
-
-    return points;
-  }, [metrics]);
-
-  // 2. Generate Return Distribution Histogram bins with VaR/ES markers
+  // 2. Histogram of observed daily portfolio returns, bins shaded by the VaR thresholds
   const histogramData = useMemo(() => {
-    const dailyVol = metrics.annualized_volatility / Math.sqrt(252);
-    const mean = metrics.mean_daily_return || 0.0;
-    const numBins = 25;
-    const minRet = mean - 3.5 * dailyVol;
-    const maxRet = mean + 3.5 * dailyVol;
-    const step = (maxRet - minRet) / numBins;
-
-    const bins = [];
-    for (let i = 0; i < numBins; i++) {
-      const x0 = minRet + i * step;
-      const x1 = x0 + step;
-      const mid = (x0 + x1) / 2;
-
-      // Normal distribution probability density
-      const z = (mid - mean) / dailyVol;
-      const density = Math.exp(-0.5 * z * z) / (dailyVol * Math.sqrt(2 * Math.PI));
-      const count = Math.round(density * step * (metrics.observations_count || 500));
-
-      bins.push({
-        range: `${(mid * 100).toFixed(1)}%`,
-        returnVal: Number(mid.toFixed(4)),
-        frequency: count,
-        isVaR95: -mid >= (metrics.selected_var_95 ?? metrics.historical_var_95),
-        isVaR99: -mid >= (metrics.selected_var_99 ?? metrics.historical_var_99),
-      });
-    }
-
-    return bins;
-  }, [metrics]);
-
-  // 3. Generate Drawdown curve
-  const drawdownData = useMemo(() => {
-    let peak = 0;
-    return cumulativeData.map((pt) => {
-      if (pt.portfolio > peak) peak = pt.portfolio;
-      const dd = peak > 0 ? (pt.portfolio - peak) / (100.0 + peak) * 100.0 : pt.portfolio;
+    if (!series) return [];
+    const var95 = metrics.selected_var_95 ?? metrics.historical_var_95;
+    const var99 = metrics.selected_var_99 ?? metrics.historical_var_99;
+    return series.histogram.map((bin) => {
+      const mid = (bin.lo + bin.hi) / 2;
       return {
-        date: pt.date,
-        drawdown: Number(Math.min(0, dd).toFixed(2)),
+        range: `${(mid * 100).toFixed(1)}%`,
+        frequency: bin.count,
+        isVaR95: bin.hi <= -var95,
+        isVaR99: bin.hi <= -var99,
       };
     });
-  }, [cumulativeData]);
+  }, [series, metrics]);
+
+  // 3. Drawdown curve (observed, in %)
+  const drawdownData = useMemo(() => {
+    if (!series) return [];
+    return series.dates.map((date, i) => ({ date, drawdown: series.drawdown_pct[i] }));
+  }, [series]);
 
   // 4. Format Component VaR risk attribution data
   const riskAttributionData = useMemo(() => {
@@ -130,6 +79,14 @@ export default function MarketRiskCharts({ metrics, currency }: MarketRiskCharts
   // 5. Correlation Matrix
   const corrSymbols = metrics.symbols;
   const corrMatrix = metrics.asset_correlations;
+
+  if (!series) {
+    return (
+      <div className="p-5 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-500">
+        Time-series charts are unavailable for this result because the API did not return chart data.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -192,6 +149,7 @@ export default function MarketRiskCharts({ metrics, currency }: MarketRiskCharts
               <Area
                 type="monotone"
                 dataKey="benchmark"
+                connectNulls
                 name={`Benchmark (${metrics.benchmark_symbol || (currency === "INR" ? "Nifty 50" : "S&P 500")})`}
                 stroke="#10b981"
                 strokeWidth={1.5}
@@ -350,7 +308,7 @@ export default function MarketRiskCharts({ metrics, currency }: MarketRiskCharts
         </div>
         <div className="flex justify-between items-center text-[10px] text-slate-400">
           <span>← Loss Tail (Negative Returns)</span>
-          <span>Zero Mean</span>
+          <span>Observed daily returns</span>
           <span>Gain Tail (Positive Returns) →</span>
         </div>
       </div>

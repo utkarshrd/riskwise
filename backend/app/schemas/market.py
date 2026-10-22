@@ -70,6 +70,7 @@ class PortfolioAnalyzeResponse(BaseModel):
     correlation_to_benchmark: float | None = None
     fx_converted: bool = False
     data_freshness: dict[str, Any] | None = None
+    chart_series: dict[str, Any] | None = None
 
 
 class MarketRefreshRequest(BaseModel):

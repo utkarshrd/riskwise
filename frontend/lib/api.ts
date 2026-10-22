@@ -186,6 +186,15 @@ export interface PortfolioRiskMetrics {
   benchmark_volatility?: number | null;
   beta_to_benchmark?: number | null;
   correlation_to_benchmark?: number | null;
+  chart_series?: ChartSeries | null;
+}
+
+export interface ChartSeries {
+  dates: string[];
+  portfolio_cumulative_pct: number[];
+  benchmark_cumulative_pct: (number | null)[] | null;
+  drawdown_pct: number[];
+  histogram: { lo: number; hi: number; count: number }[];
 }
 
 export interface StressScenarioResult {

@@ -171,3 +171,13 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Consequences:** Eliminates computational bottlenecks in backtesting, achieves full regulatory compliance, and provides actionable multi-model recommendations.
 
 
+
+## B0: Verification pass (2026-10-22)
+- **Decision:** Replace the synthetic dashboard series with backend-computed series; pass Christoffersen conditional coverage through `/var/validate`; state the credit-model leakage choice on the credit page; move prompt files to `docs/prompts/`.
+- **Reasoning:**
+  1. `MarketRiskCharts.tsx` (A5) generated the cumulative-return and drawdown curves from `Math.sin` noise around the mean and volatility, and drew the histogram from a normal density, so none of it was observed data. The analyze response now carries `chart_series` (cumulative return, benchmark, drawdown, 25-bin histogram) computed from the actual daily portfolio returns. Tests assert the plotted max drawdown equals the headline figure and the histogram counts every observation once. If the API omits the series, the page shows a notice instead of a chart.
+  2. `/var/validate` computed `christoffersen_cc_*` in the engine but dropped it when building the response, so the UI showed blanks. Fixed and covered by a test.
+  3. The credit model served is the 42-feature XGBoost (preprocessor has no `Credit_Score`). The 0.9999 ROC-AUC variant is a leakage study only; the credit page now says so.
+  4. Prompt files moved with `git mv` (history kept), none deleted.
+- **Found, deferred to B1:** at 390px the 256px fixed sidebar leaves about 130px for content and the page scrolls horizontally (614px wide); Recharts logs duplicate-key errors at that width. The SHAP panel shows raw feature names and the credit page uses a dark panel inside a light layout.
+- **Not verified:** 390px and 1440px screenshots were taken with headless Chrome driven over the DevTools protocol (`docs/screenshots/b0/`). Docker was not used.

@@ -324,6 +324,11 @@ export default function CreditRiskPage() {
               </h2>
               <span className="text-xs font-mono text-slate-500">42 Validated Features</span>
             </div>
+            <p className="text-xs text-slate-400 -mt-3">
+              The bureau Credit Score is deliberately not used as an input. A variant that included it scored a near-perfect ROC-AUC of 0.9999
+              because the risk tiers are derived from that score (target leakage), so it was rejected. This model uses the 42 trade-line and
+              delinquency features only (ROC-AUC 0.9275, Macro-F1 0.678). See the Model Card for details.
+            </p>
 
             {/* Section 1: Repayment & Delinquency History */}
             <div className="space-y-3">

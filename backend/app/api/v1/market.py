@@ -305,6 +305,9 @@ def validate_var_model(request: VaRValidationRequest, db: Session = Depends(get_
             "christoffersen_lr_stat": result.christoffersen_lr_stat,
             "christoffersen_p_value": result.christoffersen_p_value,
             "christoffersen_test_passed": result.christoffersen_test_passed,
+            "christoffersen_cc_stat": result.christoffersen_cc_stat,
+            "christoffersen_cc_p_value": result.christoffersen_cc_p_value,
+            "christoffersen_cc_test_passed": result.christoffersen_cc_test_passed,
             "summary_message": result.summary_message,
             "symbols": [h.symbol for h in holdings],
         }
@@ -337,6 +340,9 @@ def validate_var_model(request: VaRValidationRequest, db: Session = Depends(get_
             christoffersen_lr_stat=result.christoffersen_lr_stat,
             christoffersen_p_value=result.christoffersen_p_value,
             christoffersen_test_passed=result.christoffersen_test_passed,
+            christoffersen_cc_stat=result.christoffersen_cc_stat,
+            christoffersen_cc_p_value=result.christoffersen_cc_p_value,
+            christoffersen_cc_test_passed=result.christoffersen_cc_test_passed,
             summary_message=result.summary_message,
             validation_points=[p.model_dump() for p in result.validation_points]
         )

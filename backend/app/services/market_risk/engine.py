@@ -64,6 +64,7 @@ class PortfolioRiskMetrics(BaseModel):
     benchmark_volatility: float | None = None
     beta_to_benchmark: float | None = None
     correlation_to_benchmark: float | None = None
+    chart_series: dict[str, Any] | None = None
 
 
 class StressScenario(BaseModel):
@@ -170,6 +171,46 @@ class MarketRiskEngine:
                 shocks=max_dd_shocks
             )
         ]
+
+    @staticmethod
+    def _build_chart_series(
+        port_returns: pd.Series,
+        bench_returns: pd.Series | None,
+        log_returns: bool = False,
+        n_bins: int = 25,
+    ) -> dict[str, Any]:
+        """Real series for the dashboard charts, computed from observed returns only.
+
+        The portfolio is assumed rebalanced to constant weights each day, matching the
+        weighted daily returns used for every other metric. The benchmark is restricted
+        to the dates it shares with the portfolio.
+        """
+
+        def cumulative(r: pd.Series) -> pd.Series:
+            return np.exp(r.cumsum()) if log_returns else (1.0 + r).cumprod()
+
+        wealth = cumulative(port_returns)
+        running_peak = np.maximum(wealth.cummax(), 1.0)  # the starting value of 1.0 counts as a peak
+        drawdown = wealth / running_peak - 1.0
+
+        series: dict[str, Any] = {
+            "dates": [str(d.date()) for d in port_returns.index],
+            "portfolio_cumulative_pct": [round(float(v) * 100.0, 3) for v in (wealth - 1.0)],
+            "drawdown_pct": [round(float(v) * 100.0, 3) for v in drawdown],
+            "benchmark_cumulative_pct": None,
+        }
+        if bench_returns is not None and len(bench_returns) > 1:
+            bench_wealth = cumulative(bench_returns.reindex(port_returns.index))
+            series["benchmark_cumulative_pct"] = [
+                None if pd.isna(v) else round(float(v) * 100.0, 3) for v in (bench_wealth - 1.0)
+            ]
+
+        counts, edges = np.histogram(port_returns.values, bins=n_bins)
+        series["histogram"] = [
+            {"lo": round(float(edges[i]), 6), "hi": round(float(edges[i + 1]), 6), "count": int(counts[i])}
+            for i in range(n_bins)
+        ]
+        return series
 
     def analyze_portfolio(
         self,
@@ -331,11 +372,13 @@ class MarketRiskEngine:
         benchmark_vol = None
         beta_to_bench = None
         corr_to_bench = None
+        aligned_bench_ret = None
         try:
             bench_prices = self.load_price_history([bench_sym], allow_live=True)
             bench_ret = _ret.simple_returns(bench_prices[bench_sym])
             aligned_port, aligned_bench = port_returns_series.align(bench_ret, join="inner")
             if len(aligned_port) >= 10:
+                aligned_bench_ret = aligned_bench
                 benchmark_vol = round(_ret.annualized_volatility(aligned_bench), 4)
                 computed_b = _ret.beta(aligned_port, aligned_bench)
                 beta_to_bench = round(float(computed_b), 4) if not math.isnan(computed_b) else None
@@ -343,6 +386,10 @@ class MarketRiskEngine:
                 corr_to_bench = round(computed_c, 4) if not math.isnan(computed_c) else None
         except Exception:
             pass
+
+        chart_series = self._build_chart_series(
+            port_returns_series, aligned_bench_ret, log_returns=(return_method == "log")
+        )
 
         start_dt = str(prices.index[0].date())
         end_dt = str(prices.index[-1].date())
@@ -424,6 +471,7 @@ class MarketRiskEngine:
             benchmark_volatility=benchmark_vol,
             beta_to_benchmark=beta_to_bench,
             correlation_to_benchmark=corr_to_bench,
+            chart_series=chart_series,
         )
 
 

@@ -151,6 +151,10 @@ def test_market_api_workflow():
     var_val_data = var_val_res.json()
     assert var_val_data["forecast_count"] > 100
     assert "kupiec_test_passed" in var_val_data
+    # conditional coverage must reach the API response, not just the engine
+    assert var_val_data["christoffersen_cc_stat"] is not None
+    assert 0.0 <= var_val_data["christoffersen_cc_p_value"] <= 1.0
+    assert isinstance(var_val_data["christoffersen_cc_test_passed"], bool)
 
 
 def test_copilot_api_routing():
