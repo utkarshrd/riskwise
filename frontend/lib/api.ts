@@ -491,6 +491,8 @@ export interface CopilotResponse {
     snippet: string;
     url: string;
   }>;
+  /** Figures removed from the reply because no tool, citation or user message supplied them. */
+  provenance_flags?: Array<{ token: string; context: string; action: string; reason: string }>;
   offline_fallback_mode: boolean;
   safety_disclaimer: string;
 }

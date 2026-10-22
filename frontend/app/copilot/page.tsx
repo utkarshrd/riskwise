@@ -35,6 +35,7 @@ interface ChatMessage {
   intent?: string;
   tool_trace?: CopilotResponse["tool_trace"];
   citations?: CopilotResponse["citations"];
+  provenance_flags?: CopilotResponse["provenance_flags"];
   offline_fallback_mode?: boolean;
   safety_disclaimer?: string;
   timestamp: string;
@@ -60,6 +61,21 @@ const STARTER_PROMPTS = [
     label: "Market Risk Analysis",
     prompt: "Analyze market risk and VaR for a portfolio with 60% SPY and 40% AAPL.",
     category: "Market Risk",
+  },
+  {
+    label: "Compare VaR Models",
+    prompt: "Compare VaR models for equal weight spy and msft.",
+    category: "Model Validation",
+  },
+  {
+    label: "Replay Market Events",
+    prompt: "Replay covid and the adani sell-off on my portfolio of 60% reliance and 40% tcs.",
+    category: "Stress Replay",
+  },
+  {
+    label: "Reverse Stress",
+    prompt: "Reverse stress my portfolio of 50% spy and 50% msft: what market fall gives a 20% loss?",
+    category: "Reverse Stress",
   },
 ];
 
@@ -121,6 +137,7 @@ export default function RiskCopilotPage() {
         intent: response.intent,
         tool_trace: response.tool_trace,
         citations: response.citations,
+        provenance_flags: response.provenance_flags,
         offline_fallback_mode: response.offline_fallback_mode,
         safety_disclaimer: response.safety_disclaimer,
         timestamp: getFormattedTime(),
@@ -268,6 +285,23 @@ export default function RiskCopilotPage() {
                     {msg.content}
                   </div>
 
+                  {/* Figures the guard removed because nothing computed them */}
+                  {!isUser && msg.provenance_flags && msg.provenance_flags.length > 0 && (
+                    <div role="alert" className="rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200 space-y-1">
+                      <div className="font-semibold">
+                        {msg.provenance_flags.length} figure{msg.provenance_flags.length === 1 ? "" : "s"} removed
+                      </div>
+                      <p className="text-amber-300/80">
+                        Every number in a reply must come from a tool result, a cited source or your own message. These had no source:
+                      </p>
+                      <ul className="list-disc list-inside text-amber-300/80 font-mono">
+                        {msg.provenance_flags.map((f, i) => (
+                          <li key={i}>{f.token}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {/* Deterministic Tool Execution Trace */}
                   {!isUser && msg.tool_trace && msg.tool_trace.length > 0 && (
                     <div className="rounded-xl border border-slate-800 bg-slate-950/70 overflow-hidden text-xs">
@@ -278,9 +312,9 @@ export default function RiskCopilotPage() {
                         <div className="flex items-center gap-2">
                           <Zap className="w-3.5 h-3.5 text-amber-400" />
                           <span className="font-semibold text-[11px] font-mono">
-                            Tool Execution: {msg.tool_trace[0].tool_name}
+                            Tool Execution: {msg.tool_trace.map((t) => t.tool_name).join(", ")}
                           </span>
-                          {msg.tool_trace[0].is_authoritative && (
+                          {msg.tool_trace.every((t) => t.is_authoritative) && (
                             <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 font-mono">
                               Authoritative
                             </span>
@@ -291,18 +325,23 @@ export default function RiskCopilotPage() {
 
                       {isTraceExpanded && (
                         <div className="p-3 border-t border-slate-800 space-y-2 font-mono text-[11px] bg-slate-950/90">
-                          <div>
-                            <span className="text-slate-500 block mb-0.5">Parameters:</span>
-                            <pre className="bg-slate-900 p-2 rounded border border-slate-800 text-slate-300 overflow-x-auto">
-                              {JSON.stringify(msg.tool_trace[0].arguments, null, 2)}
-                            </pre>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block mb-0.5">Authoritative Engine Output:</span>
-                            <pre className="bg-slate-900 p-2 rounded border border-slate-800 text-emerald-400 overflow-x-auto">
-                              {JSON.stringify(msg.tool_trace[0].output, null, 2)}
-                            </pre>
-                          </div>
+                          {msg.tool_trace.map((t, i) => (
+                            <div key={`${t.tool_name}-${i}`} className="space-y-2">
+                              {msg.tool_trace!.length > 1 && <div className="text-slate-300 font-semibold">{t.tool_name}</div>}
+                              <div>
+                                <span className="text-slate-500 block mb-0.5">Parameters:</span>
+                                <pre className="bg-slate-900 p-2 rounded border border-slate-800 text-slate-300 overflow-x-auto max-h-48">
+                                  {JSON.stringify(t.arguments, null, 2)}
+                                </pre>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block mb-0.5">Authoritative Engine Output:</span>
+                                <pre className="bg-slate-900 p-2 rounded border border-slate-800 text-emerald-400 overflow-x-auto max-h-64">
+                                  {JSON.stringify(t.output, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

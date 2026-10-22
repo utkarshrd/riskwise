@@ -5,12 +5,14 @@ import unicodedata
 from typing import Any, TypedDict
 
 from backend.app.agents.classifier import ScoredIntentClassifier
+from backend.app.agents.provenance import ProvenanceFlag, check_answer
 from backend.app.agents.retrieval import Citation, RAGRetriever
 from backend.app.core.config import settings
 from backend.app.db.models import CopilotSession
 from backend.app.db.session import SessionLocal
 from backend.app.services.financial_stress.engine import FinancialStressEngine
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine
+from backend.app.services.market_risk.stress import StressService
 from backend.app.services.var_validation.engine import VaRValidationEngine
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
@@ -34,6 +36,7 @@ class CopilotMessageResponse(BaseModel):
     top_2_intents: list[dict[str, Any]] = Field(default_factory=list)
     tool_trace: list[ToolExecutionTrace] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
+    provenance_flags: list[ProvenanceFlag] = Field(default_factory=list)
     offline_fallback_mode: bool = True
     safety_disclaimer: str = (
         "Educational risk copilot. Authoritative numbers are computed strictly by deterministic services. "
@@ -60,8 +63,10 @@ class CopilotState(TypedDict):
     tool_name: str | None
     tool_args: dict[str, Any]
     tool_output: dict[str, Any] | None
+    tool_error: str | None
     tool_trace: list[ToolExecutionTrace]
     citations: list[Citation]
+    provenance_flags: list[ProvenanceFlag]
     answer: str
     offline_fallback_mode: bool
 
@@ -392,11 +397,26 @@ def parse_stress_parameters(text: str, session_params: dict[str, Any] | None = N
     return params, missing
 
 
+def parse_target_loss_pct(text: str) -> float | None:
+    """A loss the user names in chat, as a fraction: '20% loss', 'lose 15%', 'a drop of 30%'. None if absent or out of range."""
+    patterns = [
+        r"(\d+(?:\.\d+)?)\s*%\s*(?:portfolio\s+)?(?:loss|drawdown|fall|drop|decline)",
+        r"(?:lose|losing|loss of|fall of|drop of|decline of|down)\s+(\d+(?:\.\d+)?)\s*%",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            value = float(m.group(1)) / 100.0
+            return value if 0.0 < value < 1.0 else None
+    return None
+
+
 class RiskCopilotService:
-    def __init__(self):
+    def __init__(self, stress_service: StressService | None = None):
         self.retriever = RAGRetriever()
         self.market_engine = MarketRiskEngine()
         self.var_engine = VaRValidationEngine(self.market_engine)
+        self.stress_service = stress_service or StressService(engine=self.market_engine)
         self.intent_classifier = ScoredIntentClassifier()
         self.graph = self._build_graph()
 
@@ -408,6 +428,7 @@ class RiskCopilotService:
         workflow.add_node("parameter_extraction", self._node_parameter_extraction)
         workflow.add_node("tool_execution", self._node_tool_execution)
         workflow.add_node("answer_composition", self._node_answer_composition)
+        workflow.add_node("provenance_check", self._node_provenance_check)
 
         workflow.add_edge(START, "scope_safety_check")
 
@@ -424,7 +445,8 @@ class RiskCopilotService:
         )
 
         workflow.add_edge("tool_execution", "answer_composition")
-        workflow.add_edge("answer_composition", END)
+        workflow.add_edge("answer_composition", "provenance_check")
+        workflow.add_edge("provenance_check", END)
 
         return workflow.compile()
 
@@ -550,6 +572,15 @@ class RiskCopilotService:
         intent = cls_res["top_intent"]
         conf = cls_res["confidence"]
         top_2 = cls_res["top_2_intents"]
+
+        # Market tools first: "stress" alone means personal cash-flow stress, but these name a portfolio and a market event
+        mentions_portfolio = "portfolio" in msg or any(re.search(r"\b" + re.escape(a) + r"\b", msg) for a in TICKER_ALIASES)
+        if mentions_portfolio and any(k in msg for k in ["reverse stress", "reverse-stress", "work backwards", "how far would the market", "how much would the market", "what market fall"]):
+            return {"intent": "STRESS_REVERSE", "intent_confidence": 0.95, "top_2_intents": [{"intent": "STRESS_REVERSE", "confidence": 0.95}]}
+        if mentions_portfolio and any(k in msg for k in ["covid", "adani", "hindenburg", "election day", "election result", "stress replay", "replay"]):
+            return {"intent": "STRESS_REPLAY", "intent_confidence": 0.95, "top_2_intents": [{"intent": "STRESS_REPLAY", "confidence": 0.95}]}
+        if re.search(r"\bvar\b", msg) and any(k in msg for k in ["compare", "which var", "best var", "better var", "var models", "var methods"]):
+            return {"intent": "VAR_COMPARE", "intent_confidence": 0.95, "top_2_intents": [{"intent": "VAR_COMPARE", "confidence": 0.95}]}
 
         # Deterministic rules for unambiguous keyword guarantees
         if any(k in msg for k in ["emi", "loan payment", "monthly payment", "monthly installment", "repayment", "amortization", "monthly outgo", "borrow", "claculate", "home loan", "car loan", "kist", "loan"]):
@@ -697,6 +728,46 @@ class RiskCopilotService:
                 "tool_args": {"holdings": holdings, "lookback_window": 100}
             }
 
+        elif intent in ("VAR_COMPARE", "STRESS_REPLAY", "STRESS_REVERSE"):
+            holdings, currency, error = extract_portfolio_holdings(msg)
+            blank = {
+                "extracted_params": {}, "needs_clarification": False, "clarification_question": None,
+                "mixed_currency_error": None, "reused_params": False, "reused_description": None,
+                "tool_name": None, "tool_args": {},
+            }
+            if error:
+                return {**blank, "mixed_currency_error": error}
+            if not holdings:
+                # Never substitute a sample portfolio: the numbers would describe holdings the user did not give
+                return {
+                    **blank,
+                    "needs_clarification": True,
+                    "clarification_question": (
+                        "Which holdings should I use? Name them with weights, for example "
+                        "'60% reliance and 40% tcs' or 'equal weight spy and msft'. RiskWise does not substitute a sample portfolio."
+                    ),
+                }
+
+            params: dict[str, Any] = {"holdings": [h.model_dump() for h in holdings], "currency": currency}
+            args: dict[str, Any] = {"holdings": holdings, "currency": currency}
+            tool = {"VAR_COMPARE": "var_compare", "STRESS_REPLAY": "stress_replay", "STRESS_REVERSE": "stress_reverse"}[intent]
+
+            if intent == "STRESS_REVERSE":
+                target = parse_target_loss_pct(msg)
+                if target is None:
+                    return {
+                        **blank,
+                        "needs_clarification": True,
+                        "clarification_question": (
+                            "What portfolio loss should I work back from? For example 'a 20% loss'. "
+                            "RiskWise does not assume a target loss."
+                        ),
+                    }
+                params["target_loss_pct"] = target
+                args["target_loss_pct"] = target
+
+            return {**blank, "extracted_params": params, "tool_name": tool, "tool_args": args}
+
         elif intent in ["FINANCIAL_EDUCATION_RAG", "CREDIT_RISK_EXPLAIN", "GENERAL_CONVERSATION"]:
             # Retrieve guidelines if relevant
             return {
@@ -721,7 +792,16 @@ class RiskCopilotService:
             "tool_args": {}
         }
 
+
     def _node_tool_execution(self, state: CopilotState) -> dict[str, Any]:
+        try:
+            return self._run_tool(state)
+        except (ValueError, FileNotFoundError) as exc:
+            # A failed tool must never be papered over with numbers from somewhere else
+            logger.warning("Copilot tool '%s' failed: %s", state["tool_name"], exc)
+            return {"tool_output": None, "tool_error": str(exc), "tool_trace": [], "citations": []}
+
+    def _run_tool(self, state: CopilotState) -> dict[str, Any]:
         tool_name = state["tool_name"]
         args = state["tool_args"]
         trace = []
@@ -800,6 +880,39 @@ class RiskCopilotService:
                 top_2_intents=top_2
             ))
 
+        elif tool_name == "var_compare":
+            holdings = args["holdings"]
+            res = self.var_engine.compare_models(
+                holdings=holdings, currency=args["currency"], confidence_level=0.95, lookback_window=100
+            )
+            output = res
+            trace.append(ToolExecutionTrace(
+                tool_name="var_compare",
+                arguments={"holdings": [h.model_dump() for h in holdings], "currency": args["currency"], "confidence_level": 0.95, "lookback_window": 100},
+                output=output, is_authoritative=True, intent_confidence=conf, top_2_intents=top_2
+            ))
+
+        elif tool_name == "stress_replay":
+            holdings = args["holdings"]
+            scenarios = self.stress_service.replay(holdings=holdings, currency=args["currency"])
+            output = {"currency": args["currency"], "scenarios": scenarios}
+            trace.append(ToolExecutionTrace(
+                tool_name="stress_replay",
+                arguments={"holdings": [h.model_dump() for h in holdings], "currency": args["currency"]},
+                output=output, is_authoritative=True, intent_confidence=conf, top_2_intents=top_2
+            ))
+
+        elif tool_name == "stress_reverse":
+            holdings = args["holdings"]
+            output = self.stress_service.reverse(
+                holdings=holdings, currency=args["currency"], target_loss_pct=args["target_loss_pct"]
+            )
+            trace.append(ToolExecutionTrace(
+                tool_name="stress_reverse",
+                arguments={"holdings": [h.model_dump() for h in holdings], "currency": args["currency"], "target_loss_pct": args["target_loss_pct"]},
+                output=output, is_authoritative=True, intent_confidence=conf, top_2_intents=top_2
+            ))
+
         elif tool_name == "rag_retrieval":
             cites = self.retriever.retrieve(query=args["query"], top_k=2, min_score=0.10)
             citations = cites
@@ -828,6 +941,14 @@ class RiskCopilotService:
 
         if state["needs_clarification"]:
             return {"answer": state["clarification_question"] or "Please provide the missing parameters."}
+
+        if state.get("tool_error"):
+            return {
+                "answer": (
+                    f"The {state['tool_name']} tool could not complete: {state['tool_error']}\n\n"
+                    "RiskWise does not estimate figures without a computed result, so no numbers are given for this request."
+                )
+            }
 
         intent = state["intent"]
         output = state["tool_output"]
@@ -907,6 +1028,54 @@ class RiskCopilotService:
             )
             return {"answer": answer}
 
+        elif intent == "VAR_COMPARE" and output:
+            header = (
+                f"Rolling VaR model comparison on {output['forecast_count']} out-of-sample forecasts "
+                f"({output['confidence_level']:.0%} confidence, {output['lookback_window']}-day window):"
+            )
+            lines = [header]
+            for m in output["models"]:
+                lines.append(
+                    f"- **{m['method']}:** {m['exceptions']} exceptions vs {m['expected_exceptions']:.1f} expected "
+                    f"({m['exception_rate']:.2%}), Basel {m['basel_zone']}, Kupiec {'PASSED' if m['kupiec_test_passed'] else 'REJECTED'}"
+                )
+            lines.append(f"\n**Recommended method:** {output['recommended_method']}. {output['recommendation_reason']}")
+            lines.append("\nEach forecast uses only the trailing window before that day, so there is no look-ahead.")
+            return {"answer": "\n".join(lines)}
+
+        elif intent == "STRESS_REPLAY" and output:
+            lines = ["Historical stress replays on real prices (each holding's actual move between fixed dates):"]
+            for sc in output["scenarios"]:
+                if sc["status"] != "ok":
+                    lines.append(f"- **{sc['name']}:** no data for any holding between {sc['window_start']} and {sc['window_end']}.")
+                    continue
+                lines.append(
+                    f"- **{sc['name']}** ({sc['window_start']} to {sc['window_end']}): portfolio "
+                    f"{'loss' if sc['portfolio_return'] < 0 else 'gain'} of {abs(sc['portfolio_return']):.2%}, "
+                    f"covering {sc['covered_weight']:.0%} of the portfolio"
+                )
+                for c in sc["contributions"]:
+                    lines.append(f"  - {c['symbol']}: {c['return']:.2%}")
+                for k in sc["skipped"]:
+                    lines.append(f"  - skipped {k['symbol']}: {k['reason']}")
+            return {"answer": "\n".join(lines)}
+
+        elif intent == "STRESS_REVERSE" and output:
+            lines = [f"Reverse stress test for a {output['target_loss_pct']:.2%} portfolio loss:"]
+            lines.append(f"- **Uniform shock:** every holding falls by {abs(output['uniform_asset_shock']):.2%}")
+            if output["implied_benchmark_shock"] is not None:
+                lines.append(
+                    f"- **Market shock:** {output['benchmark_symbol']} falls by {abs(output['implied_benchmark_shock']):.2%} "
+                    f"at a portfolio beta of {output['portfolio_beta']:.2f} "
+                    f"({output['lookback_observations']} days, {output['lookback_start']} to {output['lookback_end']})"
+                )
+                for c in output["beta_contributions"]:
+                    lines.append(f"  - {c['symbol']}: beta {c['beta']:.2f}, falls {abs(c['shock']):.2%}")
+            if output.get("note"):
+                lines.append(f"\n{output['note']}")
+            lines.append("\nBetas are historical estimates and can change.")
+            return {"answer": "\n".join(lines)}
+
         elif citations:
             c = citations[0]
             cited_lines = "\n".join([f"- **{ci.title}** (Source ID: {ci.source_id}) — {ci.url}" for ci in citations])
@@ -926,6 +1095,27 @@ class RiskCopilotService:
                     "from RBI, SEBI, or the Bank for International Settlements."
                 )
             }
+
+    def _node_provenance_check(self, state: CopilotState) -> dict[str, Any]:
+        """
+        Final gate: every figure in a result-bearing reply must trace to a tool, a citation, or what the user wrote.
+
+        Safety refusals, clarification questions and mixed-currency errors are fixed wording with example values
+        ("e.g. 5 lakh at 10%") and report no computed result, so there is nothing to trace.
+        """
+        if not state["is_safe"] or state["needs_clarification"] or state["mixed_currency_error"]:
+            return {"provenance_flags": []}
+
+        sources: list[Any] = [{"arguments": t.arguments, "output": t.output} for t in state["tool_trace"]]
+        sources.append([c.model_dump() for c in state.get("citations", [])])
+        sources.append(state.get("extracted_params") or {})
+        sources.append(state.get("session_params") or {})
+        sources.append({"reused": state.get("reused_description"), "tool_error": state.get("tool_error")})
+
+        result = check_answer(state["answer"], sources, state["user_message"])
+        if result.flags:
+            logger.warning("Copilot reply had %d unsourced figure(s); lines removed.", len(result.flags))
+        return {"answer": result.answer, "provenance_flags": result.flags}
 
     def route_and_execute(self, user_message: str, session_id: str | None = None) -> CopilotMessageResponse:
         session_params: dict[str, Any] = {}
@@ -964,8 +1154,10 @@ class RiskCopilotService:
             "tool_name": None,
             "tool_args": {},
             "tool_output": None,
+            "tool_error": None,
             "tool_trace": [],
             "citations": [],
+            "provenance_flags": [],
             "answer": "",
             "offline_fallback_mode": not bool(settings.OPENAI_API_KEY or settings.ANTHROPIC_API_KEY)
         }
@@ -1011,5 +1203,6 @@ class RiskCopilotService:
             top_2_intents=final_state.get("top_2_intents", []),
             tool_trace=final_state["tool_trace"],
             citations=final_state["citations"],
+            provenance_flags=final_state.get("provenance_flags", []),
             offline_fallback_mode=final_state["offline_fallback_mode"]
         )
