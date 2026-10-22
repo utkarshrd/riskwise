@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
+@pytest.mark.requires_trained_model
 def test_register_models_with_custom_metrics(tmp_path):
     """
     Assert that registering a model from a temporary copy of model_comparison.json

@@ -1,9 +1,11 @@
+import pytest
 from backend.app.main import app
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
 
+@pytest.mark.requires_trained_model
 def test_system_status_reflects_trained_artifacts():
     """Verify system status accurately detects loaded model and market snapshots."""
     response = client.get("/api/v1/system/status")
@@ -18,6 +20,7 @@ def test_system_status_reflects_trained_artifacts():
     assert data["rag_corpus_loaded"] is True
 
 
+@pytest.mark.requires_trained_model
 def test_credit_api_workflow():
     # 1. List models
     models_res = client.get("/api/v1/credit/models")
@@ -186,6 +189,7 @@ def test_copilot_api_routing():
     assert len(d_rej["tool_trace"]) == 0
 
 
+@pytest.mark.requires_trained_model
 def test_monitoring_api_workflow():
     # 1. Models list
     models_res = client.get("/api/v1/monitoring/models")

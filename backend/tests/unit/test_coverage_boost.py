@@ -1,3 +1,4 @@
+import pytest
 from backend.app.agents.copilot import (
     RiskCopilotService,
     extract_portfolio_holdings,
@@ -78,6 +79,7 @@ def test_api_credit_error_branches():
     assert res_wi_err.status_code == 422
 
 
+@pytest.mark.requires_trained_model
 def test_credit_api_value_error_handling(monkeypatch):
     from backend.app.services.credit.service import CreditService
     def mock_err(self, *args, **kwargs):

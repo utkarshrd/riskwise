@@ -109,6 +109,7 @@ def test_kupiec_pof_edge_case_all_exceptions():
 
 # ─── 2. Indian Credit Model End-to-End & Neutral Category Verification ────────
 
+@pytest.mark.requires_trained_model
 def test_indian_credit_model_feature_schema_and_artifacts():
     """
     Verifies that the loaded credit model uses the 42 Indian Credit features
@@ -136,6 +137,7 @@ def test_indian_credit_model_feature_schema_and_artifacts():
         db.close()
 
 
+@pytest.mark.requires_trained_model
 def test_credit_service_neutral_categories_no_prime_distressed():
     """
     Verifies that P1-P4 are kept as neutral categories and unverified semantic mappings
@@ -163,6 +165,7 @@ def test_credit_service_neutral_categories_no_prime_distressed():
         db.close()
 
 
+@pytest.mark.requires_trained_model
 def test_shap_values_categorical_correct_feature_values():
     """
     Verifies that SHAP contributions for one-hot encoded categorical features

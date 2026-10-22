@@ -8,6 +8,7 @@ from backend.app.services.credit.service import CreditService
 from fastapi.testclient import TestClient
 
 
+@pytest.mark.requires_trained_model
 def test_credit_score_rejects_incomplete_metadata():
     """
     Assert that if model metadata lacks 'decision_threshold' or 'risk_band_cutoffs',

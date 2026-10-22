@@ -622,6 +622,10 @@ def populate_daily_prices_from_snapshots():
 
 
 def main():
+    # A fresh checkout has no database; apply the migrations before writing to it
+    from backend.app.db.init_db import init_db
+
+    init_db()
     logger.info("Building RiskWise Instrument Master...")
     populate_instruments()
     logger.info("Migrating snapshot prices into SQLite daily_prices...")

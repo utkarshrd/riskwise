@@ -31,8 +31,12 @@ jobs:
       - name: Build instrument master & price data (offline, from tracked files)
         run: python scripts/build_instrument_master.py
 
+      - name: Build the RAG retrieval index (offline, from the tracked knowledge corpus)
+        run: python scripts/build_index.py
+
+      # Tests that need the trained credit model skip with a stated reason: the model files are gitignored
       - name: Run tests
-        run: python -m pytest backend/tests -q
+        run: python -m pytest backend/tests -q -rs
 
   frontend:
     runs-on: ubuntu-latest

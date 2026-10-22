@@ -62,6 +62,7 @@ def test_feature_engineering_currency_free_and_guards():
     assert eng_df.loc[0, "util_trend"] == pytest.approx(0.1 - 0.01)
 
 
+@pytest.mark.requires_trained_model
 def test_profile_score_endpoint(client):
     """Test POST /api/v1/credit/profile-score with plain inputs."""
     payload = {
@@ -101,6 +102,7 @@ def test_profile_score_validation_error(client):
     assert res.status_code == 422
 
 
+@pytest.mark.requires_trained_model
 def test_what_if_actionable_mode_rejection_and_ranking(client):
     """Test that what-if actionable mode rejects protected attributes and ranks controllable changes."""
     baseline = {

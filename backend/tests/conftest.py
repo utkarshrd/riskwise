@@ -7,6 +7,8 @@ the call path is async and the schema may not be committed to the engine
 used by the synchronous Session until the first request. Creating tables
 here unconditionally guarantees they exist.
 """
+from pathlib import Path
+
 import pytest
 from backend.app.db.init_db import init_db
 
@@ -15,6 +17,21 @@ from backend.app.db.init_db import init_db
 def initialize_test_database():
     """Idempotently create all tables before the test session starts."""
     init_db()
+
+
+TRAINED_MODEL = Path(__file__).resolve().parents[2] / "artifacts" / "models" / "credit_indian_xgboost_v1.joblib"
+
+
+def pytest_collection_modifyitems(config, items):
+    """Tests that need the trained credit model skip with a stated reason in a checkout that does not have it."""
+    if TRAINED_MODEL.exists():
+        return
+    skip = pytest.mark.skip(
+        reason="trained credit model files are gitignored and absent here; run scripts/train_indian_credit.py to enable"
+    )
+    for item in items:
+        if item.get_closest_marker("requires_trained_model"):
+            item.add_marker(skip)
 
 
 @pytest.fixture(autouse=True)

@@ -1,3 +1,4 @@
+import pytest
 from backend.app.main import app
 from fastapi.testclient import TestClient
 
@@ -13,6 +14,7 @@ def test_health_check():
     assert "timestamp" in data
 
 
+@pytest.mark.requires_trained_model
 def test_system_status():
     """Verify /api/v1/system/status returns genuine computed offline and artifact statuses."""
     response = client.get("/api/v1/system/status")

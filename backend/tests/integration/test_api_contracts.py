@@ -1,3 +1,4 @@
+import pytest
 from backend.app.main import app
 from fastapi.testclient import TestClient
 
@@ -49,6 +50,7 @@ def test_api_contract_payload_size_limit_rejection():
     assert "Payload too large" in res.json()["detail"]
 
 
+@pytest.mark.requires_trained_model
 def test_api_contract_system_status_honesty():
     res = client.get("/api/v1/system/status")
     assert res.status_code == 200

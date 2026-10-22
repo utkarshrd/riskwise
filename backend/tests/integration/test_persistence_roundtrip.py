@@ -1,6 +1,7 @@
 import json
 import uuid
 
+import pytest
 from backend.app.db.models import (
     AssessmentRun,
     AuditEvent,
@@ -17,6 +18,7 @@ from fastapi.testclient import TestClient
 client = TestClient(app)
 
 
+@pytest.mark.requires_trained_model
 def test_persistence_credit_score_roundtrip():
     payload = {
         "features": {
@@ -106,6 +108,7 @@ def test_persistence_var_validation_roundtrip():
         db.close()
 
 
+@pytest.mark.requires_trained_model
 def test_persistence_drift_run_roundtrip():
     payload = {
         "reference_batch_id": "ref_baseline_val",

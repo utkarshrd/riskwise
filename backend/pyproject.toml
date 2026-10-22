@@ -28,5 +28,8 @@ target-version = "py311"
 ignore = ["B008"]
 
 [tool.pytest.ini_options]
+markers = [
+    "requires_trained_model: needs the trained credit model files, which are gitignored (run scripts/train_indian_credit.py); skipped when absent",
+]
 testpaths = ["tests"]
 pythonpath = [".", ".."]
