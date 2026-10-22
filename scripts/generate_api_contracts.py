@@ -38,6 +38,7 @@ EXTENSION_ENDPOINTS = [
     ("POST", "/api/v1/market/var/compare", "Backtest several VaR methods on one window and recommend one"),
     ("POST", "/api/v1/market/portfolio/stress/replay", "Replay COVID 2020, 4 Jun 2024 and Adani 2023 against a portfolio using real prices"),
     ("POST", "/api/v1/market/portfolio/stress/reverse", "Find the shock that produces a chosen portfolio loss"),
+    ("POST", "/api/v1/market/portfolio/import", "Import holdings from a broker CSV export (Zerodha, Groww, etc.) with automated symbol resolution and price-derived weights"),
 ]
 
 

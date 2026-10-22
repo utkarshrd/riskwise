@@ -436,6 +436,46 @@ export interface VaRValidationHistoryItem {
   christoffersen_test_passed?: boolean | null;
 }
 
+export interface ImportedHolding {
+  symbol: string;
+  name: string;
+  quantity: number;
+  latest_price: number;
+  position_value: number;
+  weight: number;
+  currency: string;
+  avg_price?: number | null;
+  unrealized_pnl?: number | null;
+  unrealized_pnl_pct?: number | null;
+  merged_count: number;
+}
+
+export interface RowValidationError {
+  row: number;
+  field: string;
+  message: string;
+  offending_value?: string | number | null;
+  suggestions?: Array<{ symbol: string; name: string }>;
+}
+
+export interface ImportRowsSummary {
+  total: number;
+  imported: number;
+  errors: number;
+  merged: number;
+}
+
+export interface PortfolioImportResponse {
+  filename?: string | null;
+  header_mapping: Record<string, string>;
+  holdings: ImportedHolding[];
+  errors: RowValidationError[];
+  warnings: string[];
+  rows: ImportRowsSummary;
+  total_value: number;
+  inferred_currency?: string | null;
+}
+
 export interface CopilotResponse {
   answer: string;
   intent: string;
@@ -642,6 +682,11 @@ export const api = {
       }>("/api/v1/market/refresh", {
         method: "POST",
         body: JSON.stringify(params || {}),
+      }),
+    importHoldings: (csv_text: string, filename?: string) =>
+      apiFetch<PortfolioImportResponse>("/api/v1/market/portfolio/import", {
+        method: "POST",
+        body: JSON.stringify({ csv_text, filename }),
       }),
   },
 

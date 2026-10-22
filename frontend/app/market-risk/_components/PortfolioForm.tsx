@@ -1,4 +1,4 @@
-import { Activity, Calendar, DollarSign, Sliders } from "lucide-react";
+import { Activity, Calendar, DollarSign, Sliders, Upload } from "lucide-react";
 import NSEStockSearch from "@/components/NSEStockSearch";
 import CurrencyAlerts from "@/components/portfolio/CurrencyAlerts";
 import FxModeToggle from "@/components/portfolio/FxModeToggle";
@@ -7,6 +7,8 @@ import PresetPicker from "@/components/portfolio/PresetPicker";
 import { Card, CardHeader, Field, inputClass, MetricInfo } from "@/components/ui";
 import type { PortfolioBuilder } from "@/hooks/usePortfolioBuilder";
 import type { AnalysisParams } from "../_hooks/useAnalysisParams";
+import { useHoldingsImport } from "../_hooks/useHoldingsImport";
+import HoldingsImportModal from "./HoldingsImportModal";
 import { VAR_METHODS } from "../_lib/options";
 
 interface PortfolioFormProps {
@@ -17,6 +19,7 @@ interface PortfolioFormProps {
 }
 
 export default function PortfolioForm({ builder: b, params: p, loading, onRun }: PortfolioFormProps) {
+  const importer = useHoldingsImport();
   const runDisabled = loading || b.blockedByCurrency || b.holdings.length === 0;
 
   return (
@@ -26,10 +29,33 @@ export default function PortfolioForm({ builder: b, params: p, loading, onRun }:
         icon={<Sliders className="w-4 h-4 text-indigo-500" />}
         title="Portfolio Setup"
         right={
-          <span className="font-mono">
-            {b.currency} • {b.holdings.length} Assets
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={importer.openModal}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition border border-indigo-200/60 dark:border-indigo-800/60 shadow-sm"
+              title="Import portfolio from Zerodha Kite, Groww, or custom CSV"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import CSV</span>
+            </button>
+            <span className="font-mono text-slate-500">
+              {b.currency} • {b.holdings.length} Assets
+            </span>
+          </div>
         }
+      />
+
+      <HoldingsImportModal
+        isOpen={importer.isOpen}
+        onClose={importer.closeModal}
+        isUploading={importer.isUploading}
+        result={importer.result}
+        error={importer.error}
+        fileName={importer.fileName}
+        onUploadFile={importer.importFile}
+        onReset={importer.reset}
+        onApplyHoldings={b.loadImportedHoldings}
       />
 
       <PresetPicker presets={b.presets} selected={b.selectedPreset} onSelect={b.selectPreset} label="Benchmark Presets" />

@@ -10,6 +10,8 @@ from backend.app.schemas.market import (
     MarketRefreshRequest,
     PortfolioAnalyzeRequest,
     PortfolioAnalyzeResponse,
+    PortfolioImportRequest,
+    PortfolioImportResponse,
     PortfolioStressTestRequest,
     ReverseStressRequest,
     ReverseStressResponse,
@@ -29,6 +31,7 @@ from backend.app.schemas.market import (
 )
 from backend.app.services.market_risk.engine import Holding, MarketRiskEngine, StressScenario
 from backend.app.services.market_risk.market_data_service import MarketDataService
+from backend.app.services.market_risk.portfolio_import import PortfolioImportService
 from backend.app.services.market_risk.stress import StressService
 from backend.app.services.market_risk.ticker_normalizer import (
     SYMBOL_CATALOGUE,
@@ -258,6 +261,26 @@ def run_market_stress_test(request: PortfolioStressTestRequest):
         msg = str(e)
         field = "holdings.weight" if "weights" in msg.lower() else "custom_scenarios"
         raise HTTPException(status_code=400, detail={"field": field, "message": msg}) from e
+
+
+def get_portfolio_import_service(db: Session = Depends(get_db)) -> PortfolioImportService:
+    """Dependency so tests can swap the price provider."""
+    return PortfolioImportService(db=db)
+
+
+@router.post("/portfolio/import", response_model=PortfolioImportResponse)
+def import_portfolio_holdings(
+    request: PortfolioImportRequest,
+    service: PortfolioImportService = Depends(get_portfolio_import_service),
+):
+    """
+    Import holdings from a broker CSV export (Zerodha, Groww, etc.) with automated
+    symbol resolution and price-derived weights.
+    """
+    try:
+        return service.import_csv(csv_text=request.csv_text, filename=request.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def get_stress_service() -> StressService:

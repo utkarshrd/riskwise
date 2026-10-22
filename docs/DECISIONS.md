@@ -226,3 +226,16 @@ This document tracks all foundational architecture, domain modeling, and technic
 - **Tests:** `test_stress_replay.py` (24): hand-computed weighted returns, base-date rule, skipping and re-weighting, FX conversion by that day's rate, the API contract, and the reverse-stress identities (contributions sum to the target; beta 1 for the benchmark itself).
 - **Limits:** a first replay for a symbol needs network access; Yahoo may lack data for delisted names (they are skipped and listed). Betas are historical estimates over the last 252 days.
 - **Docs:** `generate_api_contracts.py` now also documents the endpoints added since the PRD.
+
+## B4: CSV holdings upload (2026-10-22)
+- **Decision:** `POST /api/v1/market/portfolio/import` accepting JSON `{"csv_text": "...", "filename": "..."}` with tolerant header matching, strict symbol resolution, price-derived weights, duplicate symbol merging, and an "Import CSV" modal on the Market Risk page.
+- **Reasoning:**
+  1. `python-multipart` is not installed, so file upload uses browser `FileReader` and JSON transport. Enforced limit: 1 MB and 500 rows to prevent resource exhaustion.
+  2. Tolerant parsing automatically handles UTF-8 BOM, comma/semicolon/tab delimiters, metadata lines above the header, formatted numbers (`₹ 1,234.50`, `$1,234.50`, `(100.0)`), and broker exports (Zerodha Kite, Groww). Returns used header mapping.
+  3. Symbol resolution follows a strict 4-step hierarchy: (1) ISIN match; (2) exact symbol match (with/without `.NS`, stripping broker suffixes like `-EQ`); (3) corporate aliases; (4) exact normalized company name match. Auto-picking fuzzy matches is strictly prohibited; unmatched symbols are reported with up to 3 candidate suggestions from `search_symbols`.
+  4. Weights are computed from platform market price data (`quantity * latest_price / total_value`) fetched concurrently with up to 8 workers, never unverified broker LTPs. Rows whose prices cannot be fetched are reported in `errors` with the reason and not imported.
+  5. Duplicate symbols are merged (sum quantity, quantity-weighted average buy price) and flagged in warnings. Nothing is dropped silently.
+  6. The Market Risk page features an "Import CSV" button and modal with file dropzone, format guides, summary metrics, preview table with unrealized P&L, rejected rows list with suggestions, and a "Use These Holdings" button wired into `usePortfolioBuilder`.
+  7. Next.js upgrade recommendation note: `next build` emits an advisory regarding a security recommendation on Next.js 16.4.0. In accordance with Prompt 6 guidelines, no package upgrade was executed; rerunning `next build` continues and succeeds with exit code 0.
+- **Tests:** `test_portfolio_import.py` (13 offline tests) covering Zerodha, Groww ISINs, metadata pre-headers, BOM, delimiters, number formats, validation errors, duplicate merging, hand-computed weights, limits, and dependency injection.
+

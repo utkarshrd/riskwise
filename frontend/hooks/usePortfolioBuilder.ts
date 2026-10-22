@@ -171,6 +171,42 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
       ? holdings.map((h) => ({ symbol: h.symbol, position_value: h.position_value }))
       : holdings.map((h) => ({ symbol: h.symbol, weight: Number(h.weight) }));
 
+  const loadImportedHoldings = (
+    imported: Array<{
+      symbol: string;
+      name?: string;
+      currency?: string;
+      weight: number;
+      position_value?: number;
+    }>,
+    inferredCurrency?: string | null,
+    totalValue?: number
+  ) => {
+    setSelectedPreset("custom");
+    if (inferredCurrency) {
+      setCurrency(inferredCurrency);
+    } else {
+      // Mixed currencies: automatically opt into convert_to_base so analysis isn't blocked
+      setFxMode("convert_to_base");
+    }
+    if (totalValue && totalValue > 0) {
+      setPortfolioValue(Math.round(totalValue));
+    }
+    setHoldings(
+      imported.map((item) => ({
+        symbol: item.symbol,
+        name: item.name || item.symbol,
+        currency: item.currency || inferSymbolCurrency(item.symbol, inferredCurrency || currency),
+        weight: Number(item.weight),
+        position_value: item.position_value
+          ? Math.round(item.position_value)
+          : Math.round(item.weight * (totalValue || portfolioValue)),
+        state: "verified_snapshot",
+      }))
+    );
+    onPortfolioReset();
+  };
+
   return {
     presets,
     selectedPreset,
@@ -197,6 +233,7 @@ export function usePortfolioBuilder({ presets, defaultPreset, onProblem, onSymbo
     removeHolding,
     normalizeWeights,
     payloadHoldings,
+    loadImportedHoldings,
   };
 }
 

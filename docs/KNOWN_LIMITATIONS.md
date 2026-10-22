@@ -57,3 +57,20 @@ This document details explicit technical and methodology limitations of RiskWise
 - **Benchmark Beta Estimation:** Beta is estimated using the full aligned historical window; short joint histories (< 60 days overlap) produce unreliable CAPM betas. The API reports `beta_to_benchmark = null` in those cases.
 - **Recharts Cumulative-Return Curves:** The curves rendered in `MarketRiskCharts.tsx` are **pseudo-random simulations seeded from summary statistics** (μ, σ, β), NOT actual price path replays. They illustrate distributional shape and relative beta for educational purposes only. Actual return paths require tick-level data integration not available in the current offline snapshot strategy.
 
+---
+
+## 8. Portfolio Holdings CSV Upload (Tier B — B4)
+- **Supported Formats & Broker Exports:** Supports standard holdings exports from Zerodha Kite (`Instrument, Qty., Avg. cost, LTP, Cur. val, P&L`), Groww (`Stock Name, ISIN, Quantity, Average buy price, Buy value, Closing price`), and canonical CSVs (`symbol, quantity, avg_price`).
+- **Delimiter & Encoding:** Automatically strips UTF-8 Byte Order Marks (BOM: `\ufeff`), scans metadata header rows (up to 30 rows above real column headers), and detects comma (`,`), semicolon (`;`), and tab (`\t`) delimiters.
+- **Number Sanitization:** Automatically parses currency symbols (`₹`, `$`, `€`, `£`, `Rs.`), thousand commas (`1,234.50`), trailing spaces, and accounting negative numbers `(100.0)`.
+- **Size & Row Limits:** Enforces a maximum file size of 1 MB and a maximum of 500 rows per upload to maintain sub-second response times and prevent resource exhaustion.
+- **Strict Symbol Resolution Hierarchy:**
+  1. ISIN match against official database instruments (`instruments.isin`).
+  2. Exact symbol match (with or without `.NS` suffix, stripping broker series suffixes like `-EQ`, `-BE`, `-BL`, `-BZ`, `-SM`, `-ST`).
+  3. Curated alias match (`CORPORATE_ALIASES` and `Instrument.aliases_json`).
+  4. Exact normalized company name match against `Instrument.name` (stripping legal suffixes like Limited, Ltd, Pvt, Inc).
+  - **No Silent Fuzzy Matching:** The engine **never** auto-picks a fuzzy match to prevent inadvertent asset misallocation. If no exact match is found, the row is rejected and listed with up to 3 candidate suggestions from `search_symbols`.
+- **Price Authority & Weight Computation:** Portfolio weights are computed exclusively from authoritative platform price data (`quantity * latest_price / total_value`), not broker-supplied LTP columns. Duplicate symbols within the same upload are merged with quantity-weighted average prices and reported in warnings.
+- **Multi-Currency Policy:** If an uploaded CSV contains mixed Indian (INR) and US (USD) holdings, `inferred_currency` is returned as `null`, requiring the user to explicitly toggle `fx_mode="convert_to_base"` for unified risk analysis.
+
+

@@ -356,3 +356,49 @@ class ReverseStressResponse(BaseModel):
     beta_contributions: list[ReverseStressContribution]
     note: str | None = None
     fx: dict[str, Any] | None = None
+
+
+class PortfolioImportRequest(BaseModel):
+    csv_text: str = Field(..., description="Raw CSV content string of broker holdings export")
+    filename: str | None = Field(default=None, description="Optional original filename of the uploaded CSV")
+
+
+class ImportedHolding(BaseModel):
+    symbol: str
+    name: str
+    quantity: float
+    latest_price: float
+    position_value: float
+    weight: float
+    currency: str
+    avg_price: float | None = None
+    unrealized_pnl: float | None = None
+    unrealized_pnl_pct: float | None = None
+    merged_count: int = 1
+
+
+class RowValidationError(BaseModel):
+    row: int
+    field: str
+    message: str
+    offending_value: Any = None
+    suggestions: list[dict[str, Any]] | None = None
+
+
+class ImportRowsSummary(BaseModel):
+    total: int
+    imported: int
+    errors: int
+    merged: int
+
+
+class PortfolioImportResponse(BaseModel):
+    filename: str | None = None
+    header_mapping: dict[str, str]
+    holdings: list[ImportedHolding]
+    errors: list[RowValidationError]
+    warnings: list[str]
+    rows: ImportRowsSummary
+    total_value: float
+    inferred_currency: str | None = None
+

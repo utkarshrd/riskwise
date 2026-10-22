@@ -37,6 +37,7 @@
 | `POST` | `/api/v1/market/var/compare` | Backtest several VaR methods on one window and recommend one | Yes |
 | `POST` | `/api/v1/market/portfolio/stress/replay` | Replay COVID 2020, 4 Jun 2024 and Adani 2023 against a portfolio using real prices | Yes |
 | `POST` | `/api/v1/market/portfolio/stress/reverse` | Find the shock that produces a chosen portfolio loss | Yes |
+| `POST` | `/api/v1/market/portfolio/import` | Import holdings from a broker CSV export (Zerodha, Groww, etc.) with automated symbol resolution and price-derived weights | Yes |
 
 Market endpoints that load prices accept `fx_mode`: `strict` (default) rejects mixed USD/INR portfolios, `convert_to_base` converts into the portfolio currency with daily `USDINR=X` rates and states the FX series and date range in the response `fx` block.
 
@@ -625,6 +626,35 @@ portfolio using real prices. Holdings with no data in a window are skipped and l
   ```json
   {
     "$ref": "#/components/schemas/ReverseStressResponse"
+  }
+  ```
+- **`422`**: Validation Error
+  ```json
+  {
+    "$ref": "#/components/schemas/HTTPValidationError"
+  }
+  ```
+
+---
+
+### `POST /api/v1/market/portfolio/import`
+**Summary:** Import Portfolio Holdings  
+**Description:** Import holdings from a broker CSV export (Zerodha, Groww, etc.) with automated
+symbol resolution and price-derived weights.  
+**Tags:** Portfolio Market Risk Lab & VaR Validation  
+
+**Request Body (application/json):**
+```json
+{
+  "$ref": "#/components/schemas/PortfolioImportRequest"
+}
+```
+
+**Responses:**
+- **`200`**: Successful Response
+  ```json
+  {
+    "$ref": "#/components/schemas/PortfolioImportResponse"
   }
   ```
 - **`422`**: Validation Error
