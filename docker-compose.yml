@@ -1,7 +1,9 @@
-version: '3.8'
-
+# docker compose up -d --build     (from a full checkout that has the model files)
+# docker compose up -d             (after `docker load -i riskwise-docker.tar`)
+# See docs/DOCKER.md. API keys are optional: without them the copilot runs in its offline mode.
 services:
   backend:
+    image: riskwise-backend:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -9,34 +11,33 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=development
-      - DATABASE_URL=sqlite:////app/db/riskwise.db
-      - OFFLINE_MODE=true
-      - ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      ENVIRONMENT: production
+      DATABASE_URL: sqlite:////app/db/riskwise.db
+      OFFLINE_MODE: "true"
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
-      - ./data:/app/data
-      - ./artifacts:/app/artifacts
-      - ./knowledge:/app/knowledge
       - riskwise-db:/app/db
+      - riskwise-runs:/app/artifacts/var_validation
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 12
+      start_period: 120s
     restart: unless-stopped
 
   frontend:
+    image: riskwise-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: riskwise-frontend
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       backend:
         condition: service_healthy
@@ -44,3 +45,4 @@ services:
 
 volumes:
   riskwise-db:
+  riskwise-runs:

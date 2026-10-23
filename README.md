@@ -83,11 +83,11 @@ For in-depth architectural details, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Quick Start
 
 ### Option A: Run with Docker (Recommended for Friends / Easy Setup)
-The fastest way to run RiskWise on any machine (Windows, Mac, Linux) with zero local Python/Node dependencies:
+The backend image bundles the trained credit models, retrieval index, knowledge corpus and market snapshots, so no Python/Node, API keys or dataset are needed on the target machine. Full details: [docs/DOCKER.md](docs/DOCKER.md).
 
-1. **Clone the repo and start:**
+1. **Start** (from a checkout that has `artifacts/models/`, or after `docker load -i riskwise-docker.tar`):
    ```bash
-   docker compose up --build
+   docker compose up -d --build   # or just: docker compose up -d   after docker load
    ```
 2. **Access the application:**
    - **Frontend UI:** [http://localhost:3000](http://localhost:3000)

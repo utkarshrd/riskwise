@@ -76,3 +76,6 @@ unseen_predictions.json
 unseen_predictions.csv
 data_validation_report.json
 
+
+# Exported Docker images
+*.tar

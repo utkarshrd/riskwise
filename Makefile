@@ -1,6 +1,6 @@
 # RiskWise Development Makefile
 
-.PHONY: help setup test verify lint run-backend run-frontend clean docker-build docker-up docker-down docker-logs
+.PHONY: help setup test verify lint run-backend run-frontend clean docker-build docker-up docker-down docker-logs docker-export
 
 help:
 	@echo "Available commands:"
@@ -61,3 +61,7 @@ docker-down:
 docker-logs:
 	docker compose logs -f
 
+
+docker-export:
+	docker compose build
+	docker save -o riskwise-docker.tar riskwise-backend:latest riskwise-frontend:latest
